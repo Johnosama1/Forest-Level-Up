@@ -15,20 +15,32 @@ const HARD_SYMBOLS: TileSymbol[] = [
 export interface LevelConfig {
   rows: number;
   cols: number;
+  totalTiles: number;
   symbols: TileSymbol[];
   numSymbols: number;
 }
 
 export function getLevelConfig(level: number): LevelConfig {
+  const COLS = 5;
+  // Each level adds 39 tiles (multiple of 3), capped at 300
+  const raw = level * 39;
+  const totalTiles = Math.min(raw, 300);
+  const rows = Math.ceil(totalTiles / COLS);
+
+  let symbols: TileSymbol[];
+  let numSymbols: number;
   if (level <= 5) {
-    return { rows: 5, cols: 5, symbols: EASY_SYMBOLS, numSymbols: Math.min(3 + level, 5) };
+    symbols = EASY_SYMBOLS;
+    numSymbols = Math.min(2 + level, 5);
   } else if (level <= 20) {
-    return { rows: 6, cols: 7, symbols: MEDIUM_SYMBOLS, numSymbols: Math.min(4 + Math.floor(level / 3), 10) };
-  } else if (level <= 100) {
-    return { rows: 7, cols: 8, symbols: HARD_SYMBOLS, numSymbols: Math.min(6 + Math.floor(level / 10), 16) };
+    symbols = MEDIUM_SYMBOLS;
+    numSymbols = Math.min(4 + Math.floor(level / 3), 10);
   } else {
-    return { rows: 8, cols: 9, symbols: HARD_SYMBOLS, numSymbols: Math.min(8 + Math.floor(level / 50), 20) };
+    symbols = HARD_SYMBOLS;
+    numSymbols = Math.min(6 + Math.floor(level / 10), 20);
   }
+
+  return { rows, cols: COLS, totalTiles, symbols, numSymbols };
 }
 
 function generateId(): string {
@@ -36,54 +48,45 @@ function generateId(): string {
 }
 
 export function generateTiles(level: number): Tile[] {
-  const config = getLevelConfig(level);
-  const { rows, cols, symbols, numSymbols } = config;
+  const { rows, cols, totalTiles, symbols, numSymbols } = getLevelConfig(level);
 
   const usedSymbols = symbols.slice(0, numSymbols);
-  const totalCells = rows * cols;
 
+  // Build symbol list as multiples of 3
+  const perSymbol = Math.floor(totalTiles / numSymbols / 3) * 3 || 3;
   const symbolList: TileSymbol[] = [];
-  let i = 0;
-  while (symbolList.length < totalCells) {
-    symbolList.push(usedSymbols[i % usedSymbols.length]);
-    i++;
-  }
-
-  // Ensure counts are multiples of 3
-  const countMap: Record<string, number> = {};
-  for (const s of symbolList) {
-    countMap[s] = (countMap[s] || 0) + 1;
-  }
-  const finalList: TileSymbol[] = [];
-  for (const [sym, count] of Object.entries(countMap)) {
-    const adjusted = Math.floor(count / 3) * 3;
-    for (let j = 0; j < adjusted; j++) {
-      finalList.push(sym as TileSymbol);
+  for (const sym of usedSymbols) {
+    for (let i = 0; i < perSymbol; i++) {
+      symbolList.push(sym);
     }
   }
-
-  // Pad to fill grid
-  while (finalList.length < totalCells) {
-    finalList.push(usedSymbols[Math.floor(Math.random() * usedSymbols.length)]);
+  // Fill remaining spots to reach totalTiles (always in groups of 3)
+  let idx = 0;
+  while (symbolList.length < totalTiles) {
+    symbolList.push(usedSymbols[idx % usedSymbols.length]);
+    symbolList.push(usedSymbols[idx % usedSymbols.length]);
+    symbolList.push(usedSymbols[idx % usedSymbols.length]);
+    idx++;
   }
 
-  // Shuffle
-  const shuffled = shuffle(finalList.slice(0, totalCells));
+  const shuffled = shuffle(symbolList.slice(0, totalTiles));
 
-  const tiles: Tile[] = [];
+  // Pick random positions in the grid for the tiles (leave some cells empty)
+  const totalCells = rows * cols;
+  const allPositions: { row: number; col: number }[] = [];
   for (let r = 0; r < rows; r++) {
     for (let c = 0; c < cols; c++) {
-      const idx = r * cols + c;
-      if (idx < shuffled.length) {
-        tiles.push({
-          id: generateId() + idx,
-          symbol: shuffled[idx],
-          row: r,
-          col: c,
-        });
-      }
+      allPositions.push({ row: r, col: c });
     }
   }
+  const usedPositions = shuffle(allPositions).slice(0, totalTiles);
+
+  const tiles: Tile[] = shuffled.map((symbol, i) => ({
+    id: generateId() + i,
+    symbol,
+    row: usedPositions[i].row,
+    col: usedPositions[i].col,
+  }));
 
   return tiles;
 }
@@ -130,49 +133,17 @@ export function hasTwinsInTray(tray: Tile[]): { symbol: TileSymbol; indices: num
 
 export function getSymbolEmoji(symbol: TileSymbol): string {
   const map: Record<TileSymbol, string> = {
-    apple: '🍎',
-    pear: '🍐',
-    grape: '🍇',
-    orange: '🍊',
-    lemon: '🍋',
-    mushroom: '🍄',
-    leaf: '🍃',
-    acorn: '🌰',
-    pinecone: '🌲',
-    berry: '🫐',
-    fox: '🦊',
-    wolf: '🐺',
-    owl: '🦉',
-    deer: '🦌',
-    rabbit: '🐰',
-    rune: '🔮',
-    compass: '🧭',
-    crystal: '💎',
-    bat: '🦇',
-    hedgehog: '🦔',
+    apple: '🍎', pear: '🍐', grape: '🍇', orange: '🍊', lemon: '🍋',
+    mushroom: '🍄', leaf: '🍃', acorn: '🌰', pinecone: '🌲', berry: '🫐',
+    fox: '🦊', wolf: '🐺', owl: '🦉', deer: '🦌', rabbit: '🐰',
+    rune: '🔮', compass: '🧭', crystal: '💎', bat: '🦇', hedgehog: '🦔',
   };
   return map[symbol] || '❓';
 }
 
 export const SYMBOL_COLORS: Record<TileSymbol, string> = {
-  apple: '#e53935',
-  pear: '#8bc34a',
-  grape: '#9c27b0',
-  orange: '#ff7043',
-  lemon: '#fdd835',
-  mushroom: '#8d6e63',
-  leaf: '#4caf50',
-  acorn: '#795548',
-  pinecone: '#546e7a',
-  berry: '#e91e63',
-  fox: '#ff8f00',
-  wolf: '#78909c',
-  owl: '#6d4c41',
-  deer: '#a1887f',
-  rabbit: '#f5f5f5',
-  rune: '#5c6bc0',
-  compass: '#00897b',
-  crystal: '#00b0ff',
-  bat: '#37474f',
-  hedgehog: '#bf8c6b',
+  apple: '#e53935', pear: '#8bc34a', grape: '#9c27b0', orange: '#ff7043', lemon: '#fdd835',
+  mushroom: '#8d6e63', leaf: '#4caf50', acorn: '#795548', pinecone: '#546e7a', berry: '#e91e63',
+  fox: '#ff8f00', wolf: '#78909c', owl: '#6d4c41', deer: '#a1887f', rabbit: '#f5f5f5',
+  rune: '#5c6bc0', compass: '#00897b', crystal: '#00b0ff', bat: '#37474f', hedgehog: '#bf8c6b',
 };

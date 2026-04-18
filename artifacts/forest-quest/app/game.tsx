@@ -19,6 +19,7 @@ import { useGame } from '@/context/GameContext';
 import { Tile } from '@/context/GameContext';
 import {
   generateTiles,
+  getLevelConfig,
   isBoardEmpty,
   hasTwinsInTray,
   shuffle,
@@ -46,6 +47,9 @@ export default function GameScreen() {
   const [coinPopup, setCoinPopup] = useState<string | null>(null);
   const [winCountdown, setWinCountdown] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  // Fixed grid dimensions - set once per level, never change as tiles are removed
+  const [gridRows, setGridRows] = useState(8);
+  const [gridCols, setGridCols] = useState(5);
 
   // Sync skills from gameState on mount
   useEffect(() => {
@@ -76,11 +80,15 @@ export default function GameScreen() {
   }, [won]);
 
   const startLevel = useCallback(() => {
+    const config = getLevelConfig(currentLevel);
+    setGridRows(config.rows);
+    setGridCols(config.cols);
     const newTiles = generateTiles(currentLevel);
     setTiles(newTiles);
     setTray([]);
     setWon(false);
     setLost(false);
+    setShowExitDialog(false);
   }, [currentLevel]);
 
   // Save skills back to context whenever they change
@@ -88,13 +96,10 @@ export default function GameScreen() {
     updateSkills(skillGreen, skillRed, skillPurple);
   }, [skillGreen, skillRed, skillPurple]);
 
-  const gridCols = tiles.length > 0
-    ? Math.ceil(Math.sqrt(tiles.length + (tiles.length > 25 ? 10 : 5)))
-    : 5;
-
+  // Tile size: fixed 5 cols, fit screen width
   const tileSize = Math.min(
-    Math.floor((SCREEN_WIDTH - 32) / Math.min(gridCols, 9)),
-    52
+    Math.floor((SCREEN_WIDTH - 32) / gridCols),
+    56
   );
 
   // Insert tile into tray with smart grouping: same symbols stay adjacent
@@ -227,15 +232,18 @@ export default function GameScreen() {
     setSkillRed(prev => prev - 1);
   }, [skillRed, tray, tiles]);
 
-  // PURPLE SKILL: Shuffle board tiles AND give one extra tile from board matching a pair in tray
+  // PURPLE SKILL: Shuffle symbols among current tile positions (positions stay fixed)
   const handlePurpleSkill = useCallback(() => {
     if (skillPurple <= 0) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const shuffledTiles = shuffle(tiles.map((t, i) => ({
+    // Shuffle the symbols among existing positions, keeping positions fixed
+    const positions = tiles.map(t => ({ row: t.row, col: t.col }));
+    const shuffledPositions = shuffle(positions);
+    const shuffledTiles = tiles.map((t, i) => ({
       ...t,
-      row: Math.floor(i / gridCols),
-      col: i % gridCols,
-    })));
+      row: shuffledPositions[i].row,
+      col: shuffledPositions[i].col,
+    }));
 
     const twin = hasTwinsInTray(tray);
     if (twin) {
@@ -292,24 +300,45 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* Game Grid */}
+        {/* Game Grid - fixed positions, empty slots stay in place */}
         <ScrollView
           style={styles.gridScroll}
           contentContainerStyle={styles.gridContent}
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.gridContainer, { borderRadius: 16 }]}>
-            {Array.from({ length: Math.ceil(tiles.length / gridCols) }).map((_, row) => (
+            {Array.from({ length: gridRows }).map((_, row) => (
               <View key={row} style={styles.gridRow}>
-                {tiles.slice(row * gridCols, (row + 1) * gridCols).map(tile => (
-                  <TileComponent
-                    key={tile.id}
-                    tile={tile}
-                    size={tileSize}
-                    onPress={handleTilePress}
-                    disabled={won || lost}
-                  />
-                ))}
+                {Array.from({ length: gridCols }).map((_, col) => {
+                  const tile = tiles.find(t => t.row === row && t.col === col);
+                  if (tile) {
+                    return (
+                      <TileComponent
+                        key={tile.id}
+                        tile={tile}
+                        size={tileSize}
+                        onPress={handleTilePress}
+                        disabled={won || lost}
+                      />
+                    );
+                  }
+                  // Empty slot — keep the space
+                  return (
+                    <View
+                      key={`empty-${row}-${col}`}
+                      style={{
+                        width: tileSize,
+                        height: tileSize,
+                        margin: 2,
+                        borderRadius: 10,
+                        backgroundColor: 'rgba(255,255,255,0.04)',
+                        borderWidth: 1,
+                        borderColor: 'rgba(255,255,255,0.06)',
+                        borderStyle: 'dashed',
+                      }}
+                    />
+                  );
+                })}
               </View>
             ))}
           </View>
