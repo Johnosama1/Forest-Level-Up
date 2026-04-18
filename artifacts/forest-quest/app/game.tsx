@@ -114,9 +114,23 @@ export default function GameScreen() {
   const [watchingAd, setWatchingAd]   = useState(false);
   const [adProgress, setAdProgress]   = useState(0);
   const [notEnoughCoins, setNotEnoughCoins] = useState(false);
-  const popupScale = useRef(new Animated.Value(0)).current;
-  const exitScale  = useRef(new Animated.Value(0)).current;
-  const lostScale  = useRef(new Animated.Value(0)).current;
+  const popupScale  = useRef(new Animated.Value(0)).current;
+  const exitScale   = useRef(new Animated.Value(0)).current;
+  const lostScale   = useRef(new Animated.Value(0)).current;
+  const winScale    = useRef(new Animated.Value(0)).current;
+  const matchBurst  = useRef(new Animated.Value(0)).current;
+  const dropPulse   = useRef(new Animated.Value(0)).current;
+  const starAnims   = useRef(Array.from({ length: 6 }, () => ({
+    y:  new Animated.Value(0),
+    op: new Animated.Value(0),
+    x:  new Animated.Value(0),
+  }))).current;
+  const coinFloat   = useRef(new Animated.Value(0)).current;
+  const coinOpacity = useRef(new Animated.Value(0)).current;
+  const comboRef    = useRef(0);
+  const [comboMsg, setComboMsg] = useState<string | null>(null);
+  const comboAnim   = useRef(new Animated.Value(0)).current;
+  const comboScale  = useRef(new Animated.Value(1)).current;
 
   const topPad = Platform.OS === 'web' ? 40 : insets.top;
   const botPad = Platform.OS === 'web' ? 20 : insets.bottom;
@@ -161,6 +175,79 @@ export default function GameScreen() {
       }).start();
     }
   }, [lost]);
+
+  // Win card pop-in + stars celebration
+  useEffect(() => {
+    if (!won) return;
+    winScale.setValue(0);
+    Animated.spring(winScale, {
+      toValue: 1, useNativeDriver: useNative, bounciness: 18, speed: 9,
+    }).start();
+    // Launch 6 stars with staggered delays
+    const xPositions = [-90, -50, 0, 40, 80, -20];
+    starAnims.forEach((s, i) => {
+      s.y.setValue(0);
+      s.op.setValue(0);
+      s.x.setValue(xPositions[i]);
+      Animated.sequence([
+        Animated.delay(i * 80),
+        Animated.parallel([
+          Animated.timing(s.y, { toValue: -160 - Math.random() * 60, duration: 900, useNativeDriver: useNative }),
+          Animated.sequence([
+            Animated.timing(s.op, { toValue: 1, duration: 200, useNativeDriver: useNative }),
+            Animated.timing(s.op, { toValue: 0, duration: 600, useNativeDriver: useNative, delay: 200 }),
+          ]),
+        ]),
+      ]).start();
+    });
+  }, [won]);
+
+  // Combo badge animation
+  useEffect(() => {
+    if (comboMsg) {
+      comboAnim.setValue(0);
+      comboScale.setValue(0.5);
+      Animated.parallel([
+        Animated.spring(comboAnim, { toValue: 1, bounciness: 14, speed: 12, useNativeDriver: useNative }),
+        Animated.spring(comboScale, { toValue: 1, bounciness: 16, speed: 14, useNativeDriver: useNative }),
+      ]).start(() => {
+        Animated.delay(700).start(() => {
+          Animated.timing(comboAnim, { toValue: 0, duration: 300, useNativeDriver: useNative }).start();
+        });
+      });
+    }
+  }, [comboMsg]);
+
+  // Coin popup float animation
+  useEffect(() => {
+    if (coinPopup) {
+      coinFloat.setValue(0);
+      coinOpacity.setValue(1);
+      Animated.parallel([
+        Animated.timing(coinFloat, { toValue: -50, duration: 1100, useNativeDriver: useNative }),
+        Animated.sequence([
+          Animated.delay(700),
+          Animated.timing(coinOpacity, { toValue: 0, duration: 400, useNativeDriver: useNative }),
+        ]),
+      ]).start();
+    }
+  }, [coinPopup]);
+
+  // Drop zone pulse animation while dragging
+  useEffect(() => {
+    if (dragTile) {
+      dropPulse.setValue(0);
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(dropPulse, { toValue: 1, duration: 650, useNativeDriver: useNative }),
+          Animated.timing(dropPulse, { toValue: 0, duration: 650, useNativeDriver: useNative }),
+        ])
+      ).start();
+    } else {
+      dropPulse.stopAnimation();
+      dropPulse.setValue(0);
+    }
+  }, [!!dragTile]);
 
   // Keep drag tile ref in sync with latest value
   useEffect(() => { dragTileRef.current = dragTile; }, [dragTile]);
@@ -367,13 +454,29 @@ export default function GameScreen() {
       const afterMatch   = newTray.filter(t => !matchedIds.has(t.id));
       const afterHistory = newHistory.filter(id => !matchedIds.has(id));
 
-      updateCoins(20);
-      showCoinPopup('+20 🪙');
+      comboRef.current += 1;
+      const combo = comboRef.current;
+      const coinBonus = combo >= 3 ? 60 : combo >= 2 ? 40 : 20;
+      updateCoins(coinBonus);
+      showCoinPopup(`+${coinBonus} 🪙`);
+      if (combo >= 2) {
+        setComboMsg(
+          combo === 2 ? '🔥 كومبو x2 +20 مكافأة!' :
+          combo === 3 ? '💥 كومبو x3 +40 مكافأة!' :
+          `⚡ كومبو x${combo} رائع!`
+        );
+      }
       // Every 5th match adds 1 item of that symbol to inventory as a bonus
       if (Math.random() < 0.2) {
         addToInventory(topTile.symbol);
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      // Match burst animation
+      matchBurst.setValue(0);
+      Animated.sequence([
+        Animated.timing(matchBurst, { toValue: 1, duration: 220, useNativeDriver: useNative }),
+        Animated.timing(matchBurst, { toValue: 0, duration: 350, useNativeDriver: useNative }),
+      ]).start();
       setBoard(newBoard);
       setTray(afterMatch);
       setTrayHistory(afterHistory);
@@ -381,12 +484,14 @@ export default function GameScreen() {
         setWon(true); unlockLevel(currentLevel + 1);
       }
     } else if (newTray.length >= 7) {
+      comboRef.current = 0;
       setBoard(newBoard);
       setTray(newTray);
       setTrayHistory(newHistory);
       setLost(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } else {
+      comboRef.current = 0;
       setBoard(newBoard);
       setTray(newTray);
       setTrayHistory(newHistory);
@@ -551,11 +656,35 @@ export default function GameScreen() {
           </View>
         </View>
 
-        {/* Coin popup */}
+        {/* Combo badge */}
+        {comboMsg && (
+          <Animated.View
+            style={[
+              styles.comboBadge,
+              {
+                opacity: comboAnim,
+                transform: [{ scale: comboScale }],
+              },
+            ]}
+          >
+            <Text style={styles.comboText}>{comboMsg}</Text>
+          </Animated.View>
+        )}
+
+        {/* Coin popup — floats upward */}
         {coinPopup && (
-          <View style={styles.coinPopup}>
+          <Animated.View
+            style={[
+              styles.coinPopup,
+              {
+                opacity: coinOpacity,
+                transform: [{ translateY: coinFloat }],
+              },
+            ]}
+            pointerEvents="none"
+          >
             <Text style={styles.coinPopupText}>{coinPopup}</Text>
-          </View>
+          </Animated.View>
         )}
 
         {/* ── Board ── */}
@@ -734,19 +863,58 @@ export default function GameScreen() {
         {/* ── Win Overlay ── */}
         {won && (
           <View style={styles.resultOverlay}>
-            <View style={styles.resultCard}>
+            {/* Floating stars */}
+            {starAnims.map((s, i) => (
+              <Animated.Text
+                key={i}
+                style={[
+                  styles.starFloat,
+                  {
+                    opacity: s.op,
+                    transform: [
+                      { translateX: s.x },
+                      { translateY: s.y },
+                    ],
+                    pointerEvents: 'none',
+                  },
+                ]}
+              >
+                {['⭐', '✨', '🌟', '💫', '⭐', '🌟'][i]}
+              </Animated.Text>
+            ))}
+            <Animated.View style={[styles.resultCard, { transform: [{ scale: winScale }] }]}>
+              {/* Gold top bar */}
+              <View style={styles.winAccentBar} />
               <Text style={styles.resultEmoji}>🏆</Text>
               <Text style={styles.resultTitle}>رائع! فزت!</Text>
               <Text style={styles.resultSub}>المستوى {currentLevel} مكتمل</Text>
+              {/* Stars row */}
+              <View style={styles.winStarsRow}>
+                {[1, 2, 3].map(n => (
+                  <Text key={n} style={styles.winStar}>⭐</Text>
+                ))}
+              </View>
               <View style={styles.countdownWrap}>
                 <Text style={styles.countdownText}>العودة للخريطة خلال {winCountdown}…</Text>
               </View>
               <TouchableOpacity style={styles.nextBtn} onPress={() => router.back()}>
                 <Text style={styles.nextBtnText}>العودة الآن ←</Text>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           </View>
         )}
+
+        {/* ── Match Burst Ring ── */}
+        <Animated.View
+          style={[
+            styles.matchBurstRing,
+            {
+              opacity: matchBurst.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, 0.85, 0] }),
+              transform: [{ scale: matchBurst.interpolate({ inputRange: [0, 1], outputRange: [0.2, 2.2] }) }],
+              pointerEvents: 'none',
+            },
+          ]}
+        />
 
         {/* ── Lose Overlay ── */}
         {lost && (
@@ -866,8 +1034,22 @@ export default function GameScreen() {
             style={styles.dragOverlay}
             {...dragOverlayPR.panHandlers}
           >
-            {/* Drop zone hint on the tray area */}
-            <Animated.View style={styles.dropZoneHint} />
+            {/* Drop zone hint on the tray area — pulses while dragging */}
+            <Animated.View
+              style={[
+                styles.dropZoneHint,
+                {
+                  backgroundColor: dropPulse.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['rgba(100,220,100,0.08)', 'rgba(100,220,100,0.28)'],
+                  }),
+                  borderTopColor: dropPulse.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: ['rgba(100,220,100,0.35)', 'rgba(100,220,100,0.9)'],
+                  }),
+                },
+              ]}
+            />
 
             {/* Floating dragged tile */}
             <Animated.View
@@ -970,8 +1152,17 @@ const styles = StyleSheet.create({
   coinsText: { color: '#f5a623', fontWeight: '800', fontSize: 13 },
 
   // Coin popup
+  comboBadge: {
+    position: 'absolute', top: 65, alignSelf: 'center',
+    backgroundColor: '#9c27b0', borderRadius: 20,
+    paddingHorizontal: 18, paddingVertical: 7,
+    zIndex: 998,
+    borderWidth: 2, borderColor: '#e040fb',
+    shadowColor: '#e040fb', shadowOpacity: 0.6, shadowRadius: 8, shadowOffset: { width: 0, height: 0 },
+  },
+  comboText: { color: '#fff', fontWeight: '900', fontSize: 15, textAlign: 'center' },
   coinPopup: {
-    position: 'absolute', top: 90, alignSelf: 'center',
+    position: 'absolute', top: 110, alignSelf: 'center',
     backgroundColor: '#f5a623', borderRadius: 20,
     paddingHorizontal: 20, paddingVertical: 6, zIndex: 999,
   },
@@ -1193,7 +1384,33 @@ const styles = StyleSheet.create({
   },
   resultEmoji: { fontSize: 52, marginBottom: 10 },
   resultTitle: { color: '#f5e6d3', fontSize: 24, fontWeight: '800', marginBottom: 6 },
-  resultSub:   { color: '#9b8ec4', fontSize: 15, marginBottom: 20 },
+  resultSub:   { color: '#9b8ec4', fontSize: 15, marginBottom: 12 },
+  winAccentBar: {
+    width: '100%', height: 5, backgroundColor: '#f5a623',
+    borderRadius: 4, marginBottom: 16,
+  },
+  winStarsRow: {
+    flexDirection: 'row', gap: 8, marginBottom: 16,
+  },
+  winStar: { fontSize: 28 },
+  starFloat: {
+    position: 'absolute',
+    fontSize: 24,
+    top: SCREEN_HEIGHT * 0.5 - 12,
+    alignSelf: 'center',
+  },
+  matchBurstRing: {
+    position: 'absolute',
+    bottom: 90,
+    alignSelf: 'center',
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: '#f5a623',
+    backgroundColor: 'rgba(245,166,35,0.15)',
+    zIndex: 90,
+  },
   countdownWrap: {
     backgroundColor: 'rgba(245,166,35,0.15)',
     borderRadius: 10, paddingHorizontal: 14, paddingVertical: 5,

@@ -1,5 +1,5 @@
-import React from 'react';
-import { View, StyleSheet, Dimensions, Text } from 'react-native';
+import React, { useEffect, useRef } from 'react';
+import { View, StyleSheet, Dimensions, Text, Animated, Platform } from 'react-native';
 import { Tile } from '../context/GameContext';
 import TileComponent from './TileComponent';
 
@@ -9,6 +9,8 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 const GAP = 5;
 const PADDING = 12;
 const SLOT_SIZE = Math.floor((SCREEN_WIDTH - PADDING * 2 - GAP * (TRAY_SIZE - 1)) / TRAY_SIZE);
+
+const useNative = Platform.OS !== 'web';
 
 interface TrayBarProps {
   tray: Tile[];
@@ -25,6 +27,25 @@ export default function TrayBar({ tray }: TrayBarProps) {
     : isDanger
     ? '#ff6b35'
     : '#4caf50';
+
+  // Bounce animation for newly added tile
+  const bounceAnim = useRef(new Animated.Value(1)).current;
+  const prevLenRef = useRef(tray.length);
+
+  useEffect(() => {
+    const prevLen = prevLenRef.current;
+    prevLenRef.current = tray.length;
+    if (tray.length > prevLen) {
+      // New tile landed — bounce it
+      bounceAnim.setValue(0.6);
+      Animated.spring(bounceAnim, {
+        toValue: 1,
+        bounciness: 16,
+        speed: 14,
+        useNativeDriver: useNative,
+      }).start();
+    }
+  }, [tray.length]);
 
   return (
     <View style={styles.wrapper}>
@@ -47,7 +68,7 @@ export default function TrayBar({ tray }: TrayBarProps) {
           const tile = tray[idx];
           const isLast = idx === tray.length - 1;
           return (
-            <View
+            <Animated.View
               key={idx}
               style={[
                 styles.slot,
@@ -55,6 +76,7 @@ export default function TrayBar({ tray }: TrayBarProps) {
                   width: SLOT_SIZE,
                   height: SLOT_SIZE,
                   borderRadius: SLOT_SIZE * 0.2,
+                  transform: isLast ? [{ scale: bounceAnim }] : [],
                 },
                 tile && isLast && isDanger && styles.slotDanger,
               ]}
@@ -70,7 +92,7 @@ export default function TrayBar({ tray }: TrayBarProps) {
               ) : (
                 <View style={[styles.emptySlotInner, { borderRadius: SLOT_SIZE * 0.18 }]} />
               )}
-            </View>
+            </Animated.View>
           );
         })}
       </View>
