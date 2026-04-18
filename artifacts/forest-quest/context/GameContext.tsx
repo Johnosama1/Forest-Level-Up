@@ -31,6 +31,7 @@ interface GameContextType {
   updateSkills: (green: number, red: number, purple: number) => void;
   buySkill: (type: 'green' | 'red' | 'purple') => boolean;
   saveGame: () => void;
+  resetGame: () => void;
 }
 
 const SAVE_VERSION = '3'; // bump this to force-reset all players
@@ -119,6 +120,13 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     return true;
   }, [gameState.coins]);
 
+  const resetGame = useCallback(async () => {
+    try {
+      await AsyncStorage.removeItem('forest_quest_save');
+    } catch (_) {}
+    setGameState({ ...defaultGameState });
+  }, []);
+
   return (
     <GameContext.Provider value={{
       gameState,
@@ -128,6 +136,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       updateSkills,
       buySkill,
       saveGame,
+      resetGame,
     }}>
       {children}
     </GameContext.Provider>

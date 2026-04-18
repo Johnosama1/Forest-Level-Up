@@ -197,7 +197,7 @@ const LevelNode = memo(({ level, cx, cy, state, pulse, onPress }: NodeProps) => 
 
 // ── Main Screen ───────────────────────────────────────────
 export default function LevelMapScreen() {
-  const { gameState } = useGame();
+  const { gameState, resetGame } = useGame();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 10 : insets.top;
   const botPad = Platform.OS === 'web' ? 16 : insets.bottom;
@@ -208,7 +208,9 @@ export default function LevelMapScreen() {
   const unlocked    = gameState.unlockedLevel;
   const useNative   = Platform.OS !== 'web';
 
-  const [showMapExit, setShowMapExit] = useState(false);
+  const [showMapExit, setShowMapExit]       = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const resetScale = useRef(new Animated.Value(0)).current;
 
   // Animate exit popup in
   useEffect(() => {
@@ -219,6 +221,16 @@ export default function LevelMapScreen() {
       }).start();
     }
   }, [showMapExit]);
+
+  // Animate reset confirm popup in
+  useEffect(() => {
+    if (showResetConfirm) {
+      resetScale.setValue(0);
+      Animated.spring(resetScale, {
+        toValue: 1, useNativeDriver: useNative, bounciness: 12, speed: 14,
+      }).start();
+    }
+  }, [showResetConfirm]);
 
   // Close app handler
   const handleExitApp = useCallback(() => {
@@ -291,19 +303,34 @@ export default function LevelMapScreen() {
           <Text style={styles.coinsValue}>🪙 {gameState.coins.toLocaleString()}</Text>
         </View>
 
-        {/* X button — exits the entire app */}
-        <TouchableOpacity
-          style={styles.mapExitBtn}
-          onPress={() => {
-            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-            setShowMapExit(true);
-          }}
-          activeOpacity={0.75}
-          testID="map-exit-btn"
-        >
-          <View style={styles.mapExitBtnGlow} pointerEvents="none" />
-          <Feather name="x" size={20} color="#ff6b6b" />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          {/* Reset button — restarts game from scratch */}
+          <TouchableOpacity
+            style={styles.resetBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowResetConfirm(true);
+            }}
+            activeOpacity={0.75}
+            testID="map-reset-btn"
+          >
+            <Feather name="refresh-ccw" size={17} color="#f5a623" />
+          </TouchableOpacity>
+
+          {/* X button — exits the entire app */}
+          <TouchableOpacity
+            style={styles.mapExitBtn}
+            onPress={() => {
+              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+              setShowMapExit(true);
+            }}
+            activeOpacity={0.75}
+            testID="map-exit-btn"
+          >
+            <View style={styles.mapExitBtnGlow} pointerEvents="none" />
+            <Feather name="x" size={20} color="#ff6b6b" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* ── Scrollable Tower Map ── */}
@@ -418,6 +445,51 @@ export default function LevelMapScreen() {
         </View>
       )}
 
+      {/* ══ Reset Confirmation Popup ══ */}
+      {showResetConfirm && (
+        <View style={styles.resetOverlay}>
+          <Animated.View style={[styles.resetCard, { transform: [{ scale: resetScale }] }]}>
+            <View style={styles.resetAccentBar} />
+
+            <View style={styles.resetIconCircle}>
+              <Feather name="refresh-ccw" size={34} color="#f5a623" />
+            </View>
+
+            <Text style={styles.resetTitle}>إعادة تشغيل اللعبة؟</Text>
+            <Text style={styles.resetSub}>
+              سيتم حذف جميع تقدمك وعملاتك{'\n'}والبدء من الدور الأول بـ 0 عملة
+            </Text>
+
+            <View style={styles.resetDivider} />
+
+            <View style={styles.resetBtnRow}>
+              <TouchableOpacity
+                style={styles.resetBtnYes}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setShowResetConfirm(false);
+                  resetGame();
+                  Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+                }}
+              >
+                <Text style={styles.resetBtnYesText}>نعم، إعادة التشغيل</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.resetBtnNo}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setShowResetConfirm(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <Text style={styles.resetBtnNoText}>إلغاء</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </View>
+      )}
+
     </ImageBackground>
   );
 }
@@ -452,6 +524,93 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
+  // Header right group
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+
+  // Reset button
+  resetBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: '#1e0e3ecc',
+    borderWidth: 2, borderColor: '#f5a62344',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35, shadowRadius: 6, elevation: 5,
+  },
+
+  // Reset confirmation overlay
+  resetOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5,2,18,0.90)',
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 500,
+  },
+  resetCard: {
+    width: Math.min(rawW, 430) * 0.85,
+    backgroundColor: '#100a20',
+    borderRadius: 26, borderWidth: 2,
+    borderColor: '#f5a62355',
+    alignItems: 'center', paddingBottom: 26,
+    overflow: 'hidden',
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.28, shadowRadius: 22, elevation: 20,
+  },
+  resetAccentBar: {
+    width: '100%', height: 4,
+    backgroundColor: '#f5a623', marginBottom: 26,
+  },
+  resetIconCircle: {
+    width: 78, height: 78, borderRadius: 39,
+    backgroundColor: '#f5a62315',
+    borderWidth: 2, borderColor: '#f5a62355',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 18,
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4, shadowRadius: 12, elevation: 8,
+  },
+  resetTitle: {
+    color: '#f5e6d3', fontSize: 20, fontWeight: '900',
+    textAlign: 'center', paddingHorizontal: 20, marginBottom: 10,
+  },
+  resetSub: {
+    color: '#7a6aaa', fontSize: 13.5, textAlign: 'center',
+    paddingHorizontal: 22, lineHeight: 21, marginBottom: 22,
+  },
+  resetDivider: {
+    width: '80%', height: 1,
+    backgroundColor: '#f5a62318', marginBottom: 22,
+  },
+  resetBtnRow: {
+    flexDirection: 'row', gap: 12,
+    paddingHorizontal: 22, width: '100%',
+  },
+  resetBtnYes: {
+    flex: 1, backgroundColor: '#f5a623',
+    borderRadius: 14, paddingVertical: 14,
+    alignItems: 'center',
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45, shadowRadius: 10, elevation: 8,
+  },
+  resetBtnYesText: {
+    color: '#1a0e2e', fontWeight: '900', fontSize: 13.5, textAlign: 'center',
+  },
+  resetBtnNo: {
+    flex: 1, backgroundColor: 'transparent',
+    borderRadius: 14, borderWidth: 2,
+    borderColor: '#f5a62344',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  resetBtnNoText: {
+    color: '#f5a623', fontWeight: '800', fontSize: 15,
+  },
+
   // Map-screen X exit button
   mapExitBtn: {
     width: 40, height: 40, borderRadius: 20,
