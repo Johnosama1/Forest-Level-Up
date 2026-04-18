@@ -79,6 +79,7 @@ export default function GameScreen() {
   const [adProgress, setAdProgress]   = useState(0);
   const [notEnoughCoins, setNotEnoughCoins] = useState(false);
   const popupScale = useRef(new Animated.Value(0)).current;
+  const exitScale  = useRef(new Animated.Value(0)).current;
 
   const topPad = Platform.OS === 'web' ? 40 : insets.top;
   const botPad = Platform.OS === 'web' ? 20 : insets.bottom;
@@ -93,7 +94,7 @@ export default function GameScreen() {
 
   useEffect(() => { startLevel(); }, [currentLevel]);
 
-  // Popup appear animation
+  // Skill popup appear animation
   useEffect(() => {
     if (skillPopup) {
       Animated.spring(popupScale, {
@@ -103,6 +104,16 @@ export default function GameScreen() {
       popupScale.setValue(0);
     }
   }, [skillPopup]);
+
+  // Exit dialog appear animation
+  useEffect(() => {
+    if (showExitDialog) {
+      exitScale.setValue(0);
+      Animated.spring(exitScale, {
+        toValue: 1, useNativeDriver: useNative, bounciness: 12, speed: 14,
+      }).start();
+    }
+  }, [showExitDialog]);
 
   // Auto-navigate home after winning
   useEffect(() => {
@@ -322,8 +333,14 @@ export default function GameScreen() {
 
         {/* ── Header ── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => setShowExitDialog(true)} style={styles.exitBtn} testID="exit-btn">
-            <Feather name="x" size={20} color="#f5a623" />
+          <TouchableOpacity
+            onPress={() => setShowExitDialog(true)}
+            style={styles.exitBtn}
+            testID="exit-btn"
+            activeOpacity={0.75}
+          >
+            <View style={styles.exitBtnGlow} pointerEvents="none" />
+            <Feather name="x" size={22} color="#ff6b6b" />
           </TouchableOpacity>
           <Text style={styles.levelText}>المستوى {currentLevel}</Text>
           <View style={styles.coinsBadge}>
@@ -523,21 +540,49 @@ export default function GameScreen() {
 
         {/* ── Exit Dialog ── */}
         {showExitDialog && (
-          <View style={styles.resultOverlay}>
-            <View style={styles.resultCard}>
-              <Text style={styles.resultEmoji}>🚪</Text>
-              <Text style={styles.resultTitle}>الخروج من اللعبة؟</Text>
-              <Text style={styles.resultSub}>سيتم فقدان تقدمك في هذا المستوى</Text>
-              <TouchableOpacity
-                style={styles.nextBtn}
-                onPress={() => { setShowExitDialog(false); router.back(); }}
-              >
-                <Text style={styles.nextBtnText}>نعم، اخرج</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.mapBtn} onPress={() => setShowExitDialog(false)}>
-                <Text style={styles.mapBtnText}>لا، استمر</Text>
-              </TouchableOpacity>
-            </View>
+          <View style={styles.exitOverlay}>
+            <Animated.View style={[styles.exitCard, { transform: [{ scale: exitScale }] }]}>
+              {/* Red accent stripe */}
+              <View style={styles.exitAccentBar} />
+
+              {/* Icon */}
+              <View style={styles.exitIconCircle}>
+                <Feather name="log-out" size={34} color="#ff6b6b" />
+              </View>
+
+              <Text style={styles.exitTitle}>هل تريد الخروج من اللعبة؟</Text>
+              <Text style={styles.exitSub}>سيضيع تقدمك في هذا المستوى</Text>
+
+              <View style={styles.exitDivider} />
+
+              {/* Buttons row */}
+              <View style={styles.exitBtnRow}>
+                {/* نعم */}
+                <TouchableOpacity
+                  style={styles.exitBtnYes}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setShowExitDialog(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+                    router.back();
+                  }}
+                >
+                  <Text style={styles.exitBtnYesText}>نعم</Text>
+                </TouchableOpacity>
+
+                {/* لا */}
+                <TouchableOpacity
+                  style={styles.exitBtnNo}
+                  activeOpacity={0.8}
+                  onPress={() => {
+                    setShowExitDialog(false);
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                  }}
+                >
+                  <Text style={styles.exitBtnNoText}>لا</Text>
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
           </View>
         )}
       </View>
@@ -557,12 +602,25 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     height: HEADER_H,
+    zIndex: 50,
   },
   exitBtn: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: '#2d1b4ecc',
-    borderWidth: 1, borderColor: '#f5a62366',
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#1e0818cc',
+    borderWidth: 2, borderColor: '#ff6b6b66',
     alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 8,
+    elevation: 8,
+    position: 'relative',
+  },
+  exitBtnGlow: {
+    position: 'absolute',
+    width: 50, height: 50, borderRadius: 25,
+    borderWidth: 1.5, borderColor: '#ff6b6b33',
+    top: -5, left: -5,
   },
   levelText: { color: '#f5e6d3', fontSize: 17, fontWeight: '700' },
   coinsBadge: {
@@ -764,4 +822,105 @@ const styles = StyleSheet.create({
     width: '100%', alignItems: 'center',
   },
   mapBtnText: { color: '#f5a623', fontWeight: '700', fontSize: 14 },
+
+  // ── Premium Exit Dialog ──────────────────────────────
+  exitOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5,2,18,0.86)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 300,
+  },
+  exitCard: {
+    width: SCREEN_WIDTH * 0.84,
+    backgroundColor: '#100820',
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#ff6b6b55',
+    alignItems: 'center',
+    paddingBottom: 24,
+    overflow: 'hidden',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 24,
+  },
+  exitAccentBar: {
+    width: '100%',
+    height: 4,
+    backgroundColor: '#ff6b6b',
+    marginBottom: 28,
+  },
+  exitIconCircle: {
+    width: 78, height: 78, borderRadius: 39,
+    backgroundColor: '#ff6b6b18',
+    borderWidth: 2, borderColor: '#ff6b6b55',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 18,
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  exitTitle: {
+    color: '#f5e6d3',
+    fontSize: 20,
+    fontWeight: '900',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+    marginBottom: 8,
+  },
+  exitSub: {
+    color: '#7a6aaa',
+    fontSize: 13,
+    textAlign: 'center',
+    marginBottom: 20,
+    paddingHorizontal: 20,
+  },
+  exitDivider: {
+    width: '80%', height: 1,
+    backgroundColor: '#ff6b6b18',
+    marginBottom: 22,
+  },
+  exitBtnRow: {
+    flexDirection: 'row',
+    gap: 14,
+    paddingHorizontal: 24,
+    width: '100%',
+  },
+  exitBtnYes: {
+    flex: 1,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 8,
+  },
+  exitBtnYesText: {
+    color: '#fff',
+    fontWeight: '900',
+    fontSize: 17,
+    letterSpacing: 1,
+  },
+  exitBtnNo: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#f5a62344',
+    paddingVertical: 15,
+    alignItems: 'center',
+  },
+  exitBtnNoText: {
+    color: '#f5a623',
+    fontWeight: '800',
+    fontSize: 17,
+    letterSpacing: 1,
+  },
 });
