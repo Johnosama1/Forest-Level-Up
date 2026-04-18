@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
   Animated,
+  PanResponder,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +17,7 @@ import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 
 import { useGame } from '@/context/GameContext';
-import { Tile } from '@/context/GameContext';
+import { Tile, TileSymbol } from '@/context/GameContext';
 
 import {
   generateBoard,
@@ -96,6 +97,14 @@ export default function GameScreen() {
   const [inventory, setInventory] = useState<InventoryEntry[]>([]);
   const [showInventory, setShowInventory] = useState(false);
 
+  // ── Drag & Drop ────────────────────────────────────────
+  const [dragTile, setDragTile] = useState<{ tile: Tile; row: number; col: number } | null>(null);
+  const dragPosX = useRef(new Animated.Value(0)).current;
+  const dragPosY = useRef(new Animated.Value(0)).current;
+  const trayYRef = useRef(0);
+  const dragTileRef = useRef<typeof dragTile>(null);
+  const handleCellPressRef = useRef(handleCellPress);
+
   // Ambient forest sound — driven by profile.soundEnabled
   const { profile } = useGame();
   useForestAmbient(profile.soundEnabled);
@@ -152,6 +161,33 @@ export default function GameScreen() {
       }).start();
     }
   }, [lost]);
+
+  // Keep drag refs in sync with latest values
+  useEffect(() => { dragTileRef.current = dragTile; }, [dragTile]);
+  useEffect(() => { handleCellPressRef.current = handleCellPress; }, [handleCellPress]);
+
+  // PanResponder for the drag overlay — created once, reads via refs
+  const dragOverlayPR = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderMove: (e) => {
+        dragPosX.setValue(e.nativeEvent.pageX);
+        dragPosY.setValue(e.nativeEvent.pageY);
+      },
+      onPanResponderRelease: (e) => {
+        const info = dragTileRef.current;
+        const dropY = e.nativeEvent.pageY;
+        // Use measured tray position if available, otherwise bottom 30% of screen
+        const threshold = trayYRef.current > 0 ? trayYRef.current - 60 : SCREEN_HEIGHT * 0.65;
+        if (info && dropY >= threshold) {
+          handleCellPressRef.current(info.row, info.col);
+        }
+        setDragTile(null);
+      },
+      onPanResponderTerminate: () => setDragTile(null),
+    })
+  ).current;
 
   // Auto-navigate home after winning
   useEffect(() => {
@@ -296,6 +332,16 @@ export default function GameScreen() {
       return true;
     });
   };
+
+  const handleLongPress = useCallback((row: number, col: number, pageX: number, pageY: number) => {
+    if (won || lost) return;
+    const stack = board[row]?.[col];
+    if (!stack || stack.length === 0) return;
+    setDragTile({ tile: stack[0], row, col });
+    dragPosX.setValue(pageX);
+    dragPosY.setValue(pageY);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+  }, [won, lost, board, dragPosX, dragPosY]);
 
   const handleCellPress = useCallback((row: number, col: number) => {
     if (won || lost) return;
@@ -526,6 +572,8 @@ export default function GameScreen() {
                       activeOpacity={depth > 0 ? 0.7 : 1}
                       delayPressIn={0}
                       onPress={() => handleCellPress(row, col)}
+                      onLongPress={(e) => handleLongPress(row, col, e.nativeEvent.pageX, e.nativeEvent.pageY)}
+                      delayLongPress={300}
                       disabled={won || lost || depth === 0}
                       style={[
                         styles.cell,
@@ -581,7 +629,15 @@ export default function GameScreen() {
         />
 
         {/* ── Tray ── */}
-        <TrayBar tray={tray} />
+        <View
+          onLayout={(e) => {
+            e.target.measure((_x: number, _y: number, _w: number, _h: number, _px: number, py: number) => {
+              trayYRef.current = py;
+            });
+          }}
+        >
+          <TrayBar tray={tray} />
+        </View>
 
         {/* ══════════════ SKILL PURCHASE POPUP ══════════════ */}
         {skillPopup && skillDef && (
@@ -795,6 +851,44 @@ export default function GameScreen() {
               </View>
             </Animated.View>
           </View>
+        )}
+        {/* ── Drag & Drop Overlay ── */}
+        {dragTile && (
+          <Animated.View
+            style={styles.dragOverlay}
+            {...dragOverlayPR.panHandlers}
+          >
+            {/* Drop zone hint on the tray area */}
+            <Animated.View style={styles.dropZoneHint} />
+
+            {/* Floating dragged tile */}
+            <Animated.View
+              style={[
+                styles.floatingTile,
+                {
+                  transform: [
+                    { translateX: Animated.subtract(dragPosX, tileSize / 2) },
+                    { translateY: Animated.subtract(dragPosY, tileSize / 2) },
+                  ],
+                  width: tileSize + 8,
+                  height: tileSize + 8,
+                },
+              ]}
+              pointerEvents="none"
+            >
+              <TileComponent
+                tile={dragTile.tile}
+                size={tileSize + 8}
+                onPress={() => {}}
+                disabled
+              />
+            </Animated.View>
+
+            {/* Drag tip */}
+            <View style={styles.dragTip} pointerEvents="none">
+              <Text style={styles.dragTipText}>↓ اسحب نحو الشريط لإضافة القطعة</Text>
+            </View>
+          </Animated.View>
         )}
       </View>
     </ImageBackground>
@@ -1030,6 +1124,48 @@ const styles = StyleSheet.create({
   },
   popupBtnCancelText: {
     color: '#665599', fontSize: 14, fontWeight: '600',
+  },
+
+  // ── Drag & Drop ───────────────────────────────────────
+  dragOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 500,
+  },
+  dropZoneHint: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 120,
+    backgroundColor: 'rgba(100,220,100,0.12)',
+    borderTopWidth: 2,
+    borderTopColor: 'rgba(100,220,100,0.5)',
+  },
+  floatingTile: {
+    position: 'absolute',
+    shadowColor: '#fff',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.5,
+    shadowRadius: 12,
+    elevation: 20,
+    opacity: 0.92,
+  },
+  dragTip: {
+    position: 'absolute',
+    bottom: 130,
+    alignSelf: 'center',
+    backgroundColor: 'rgba(20,10,45,0.85)',
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+    borderWidth: 1,
+    borderColor: 'rgba(100,220,100,0.4)',
+  },
+  dragTipText: {
+    color: '#7ddf90',
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
   },
 
   // ── Result overlays ───────────────────────────────────

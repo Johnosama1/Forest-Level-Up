@@ -1,0 +1,38 @@
+Use the following as the main project requirements and continue from the current project state.
+
+Use the uploaded images strictly as the only game assets.
+Do NOT generate, replace, or substitute any new elements such as fruits, placeholders, or AI-generated graphics.
+All interactive and visual elements in the game must come exclusively from the provided images (characters, animals, objects, items).
+If an asset is not present in the uploaded images, it must NOT be added or replaced under any circumstances.
+Maintain the original visual style and consistency of the provided assets.
+Background and audio can remain unchanged, but all gameplay elements must come only from the provided images.
+If any asset is unclear or missing, ask for clarification instead of generating alternatives.
+
+Game Systems:
+
+1. Sprite System
+
+- Use sprite-based structure for all characters and objects
+- Each entity should support different states (idle, move, action) only if those states exist in the provided images
+- Do not create or generate new animations that are not included in the uploaded assets
+- Keep all animations strictly based on the provided sprite sheets or images
+
+2. Inventory System
+
+- Implement an in-game inventory system for collecting and storing items
+- Players can pick up items only from the provided assets
+- Inventory must dynamically update based on collected items
+- Display collected items clearly in a UI panel
+
+3. Drag & Drop System
+
+- Enable drag and drop interaction for game objects
+- Players can move, place, or interact with objects using drag & drop
+- Only uploaded assets can be used in these interactions
+- Ensure smooth and responsive interaction on both mouse and touch devices
+
+IMPORTANT:
+Continue the project from the last existing state.
+First check the current code and existing UI.
+Do NOT restart, remove, or rewrite anything that is already working.
+Only continue implementing the missing parts, especially inventory system and drag & drop.
