@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import {
   View,
   Text,
+  Image,
   StyleSheet,
   TouchableOpacity,
   ImageBackground,
@@ -16,6 +17,7 @@ import * as Haptics from 'expo-haptics';
 
 import { useGame } from '@/context/GameContext';
 import { Tile } from '@/context/GameContext';
+
 import {
   generateBoard,
   GameBoard,
@@ -32,6 +34,14 @@ import TutorialOverlay from '@/components/TutorialOverlay';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
+
+// Images shown in empty cells — cycle per cell position (not interactive)
+const FILLER_IMAGES = [
+  require('../assets/tiles/pear.png'),
+  require('../assets/tiles/grape.png'),
+  require('../assets/tiles/orange.png'),
+];
+const FILLER_COLORS = ['#8bc34a', '#9c27b0', '#ff7043'];
 const SKILL_COST = 200;
 const CONTINUE_COST = 1000;
 
@@ -409,13 +419,24 @@ export default function GameScreen() {
                         depth === 0 && styles.cellEmpty,
                       ]}
                     >
-                      {depth === 0 && (
-                        <ImageBackground
-                          source={require('../assets/images/forest_bg.jpg')}
-                          style={[styles.cellEmptyImg, { borderRadius: tileSize * 0.14 }]}
-                          imageStyle={{ borderRadius: tileSize * 0.14 }}
-                        />
-                      )}
+                      {depth === 0 && (() => {
+                        const fi = (row * BOARD_COLS + col) % 3;
+                        const fc = FILLER_COLORS[fi];
+                        return (
+                          <View style={[styles.fillerTile, {
+                            width: tileSize, height: tileSize,
+                            borderRadius: tileSize * 0.18,
+                            backgroundColor: fc + '2a',
+                            borderColor: fc + '99',
+                          }]}>
+                            <Image
+                              source={FILLER_IMAGES[fi]}
+                              style={{ width: tileSize * 0.78, height: tileSize * 0.78 }}
+                              resizeMode="contain"
+                            />
+                          </View>
+                        );
+                      })()}
                       {depth > 0 && (
                         <>
                           {depth >= 3 && (
@@ -736,11 +757,15 @@ const styles = StyleSheet.create({
     borderWidth: 0,
     overflow: 'hidden',
   },
-  cellEmptyImg: {
-    flex: 1,
-    width: '100%',
-    height: '100%',
-    opacity: 0.45,
+  fillerTile: {
+    borderWidth: 2,
+    alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 2,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.2,
+    shadowRadius: 2,
   },
   depthLayer2: {
     position: 'absolute',
