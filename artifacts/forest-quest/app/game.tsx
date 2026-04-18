@@ -550,14 +550,14 @@ export default function GameScreen() {
                 <Feather name="log-out" size={34} color="#ff6b6b" />
               </View>
 
-              <Text style={styles.exitTitle}>هل تريد الخروج من اللعبة؟</Text>
+              <Text style={styles.exitTitle}>هل تريد الخروج من الدور؟</Text>
               <Text style={styles.exitSub}>سيضيع تقدمك في هذا المستوى</Text>
 
               <View style={styles.exitDivider} />
 
               {/* Buttons row */}
               <View style={styles.exitBtnRow}>
-                {/* نعم */}
+                {/* الخروج من الدور */}
                 <TouchableOpacity
                   style={styles.exitBtnYes}
                   activeOpacity={0.8}
@@ -567,10 +567,10 @@ export default function GameScreen() {
                     router.back();
                   }}
                 >
-                  <Text style={styles.exitBtnYesText}>نعم</Text>
+                  <Text style={styles.exitBtnYesText}>الخروج من الدور</Text>
                 </TouchableOpacity>
 
-                {/* لا */}
+                {/* لا الخروج من الدور */}
                 <TouchableOpacity
                   style={styles.exitBtnNo}
                   activeOpacity={0.8}
@@ -579,7 +579,7 @@ export default function GameScreen() {
                     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
                   }}
                 >
-                  <Text style={styles.exitBtnNoText}>لا</Text>
+                  <Text style={styles.exitBtnNoText}>لا الخروج من الدور</Text>
                 </TouchableOpacity>
               </View>
             </Animated.View>
@@ -905,8 +905,9 @@ const styles = StyleSheet.create({
   exitBtnYesText: {
     color: '#fff',
     fontWeight: '900',
-    fontSize: 17,
-    letterSpacing: 1,
+    fontSize: 14,
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
   exitBtnNo: {
     flex: 1,
@@ -920,7 +921,8 @@ const styles = StyleSheet.create({
   exitBtnNoText: {
     color: '#f5a623',
     fontWeight: '800',
-    fontSize: 17,
-    letterSpacing: 1,
+    fontSize: 14,
+    letterSpacing: 0.5,
+    textAlign: 'center',
   },
 });
