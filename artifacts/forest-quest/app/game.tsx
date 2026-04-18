@@ -160,12 +160,11 @@ export default function GameScreen() {
     setBoard(prev => {
       const next: GameBoard = prev.map(r => r.map(s => [...s]));
       let removed = 0;
-      outer: for (let r = 0; r < BOARD_ROWS; r++) {
-        for (let c = 0; c < BOARD_COLS; c++) {
-          if (next[r][c].length > 0 && removed < 3) {
+      for (let r = 0; r < BOARD_ROWS && removed < 3; r++) {
+        for (let c = 0; c < BOARD_COLS && removed < 3; c++) {
+          if (next[r][c].length > 0) {
             next[r][c] = next[r][c].slice(1);
             removed++;
-            if (removed === 3) break outer;
           }
         }
       }
