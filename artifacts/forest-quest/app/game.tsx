@@ -716,9 +716,9 @@ const styles = StyleSheet.create({
     marginHorizontal: BOARD_MARGIN,
   },
   board: {
-    backgroundColor: 'rgba(20,10,45,0.6)',
+    backgroundColor: 'transparent',
     borderRadius: 18, padding: 8,
-    borderWidth: 1, borderColor: '#4a307055',
+    borderWidth: 0,
   },
   boardRow: { flexDirection: 'row', marginBottom: CELL_GAP },
   cell: {
@@ -727,6 +727,7 @@ const styles = StyleSheet.create({
   cellEmpty: {
     backgroundColor: 'transparent',
     borderWidth: 0,
+    opacity: 0,
   },
   depthLayer2: {
     position: 'absolute',
