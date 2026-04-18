@@ -42,9 +42,11 @@ interface TileComponentProps {
 }
 
 export default function TileComponent({ tile, size, onPress, disabled, style }: TileComponentProps) {
-  const bgColor = SYMBOL_COLORS[tile.symbol] + '2a';
-  const borderColor = SYMBOL_COLORS[tile.symbol] + '99';
+  const color = SYMBOL_COLORS[tile.symbol];
+  const bgColor = color + '30';
+  const borderColor = color + 'cc';
   const imgSrc = TILE_IMAGES[tile.symbol];
+  const radius = size * 0.2;
 
   return (
     <TouchableOpacity
@@ -57,7 +59,8 @@ export default function TileComponent({ tile, size, onPress, disabled, style }: 
           height: size,
           backgroundColor: bgColor,
           borderColor: borderColor,
-          borderRadius: size * 0.18,
+          borderRadius: radius,
+          shadowColor: color,
         },
         style,
       ]}
@@ -66,8 +69,16 @@ export default function TileComponent({ tile, size, onPress, disabled, style }: 
     >
       <Image
         source={imgSrc}
-        style={{ width: size * 0.78, height: size * 0.78 }}
+        style={{ width: size * 0.72, height: size * 0.72 }}
         resizeMode="contain"
+      />
+      {/* Gloss highlight */}
+      <View
+        pointerEvents="none"
+        style={[
+          styles.gloss,
+          { borderRadius: radius, width: size * 0.55, height: size * 0.35, top: size * 0.07, left: size * 0.08 },
+        ]}
       />
     </TouchableOpacity>
   );
@@ -79,10 +90,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     margin: 2,
-    elevation: 3,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 3,
+    elevation: 5,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    overflow: 'hidden',
+  },
+  gloss: {
+    position: 'absolute',
+    backgroundColor: 'rgba(255,255,255,0.18)',
   },
 });

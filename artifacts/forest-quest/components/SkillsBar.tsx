@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 interface SkillsBarProps {
@@ -33,7 +33,7 @@ export default function SkillsBar({
         disabled={false}
       />
       <SkillButton
-        color="#e07030"
+        color="#ff7043"
         count={redCount}
         onPress={onRed}
         icon="rotate-ccw"
@@ -42,7 +42,7 @@ export default function SkillsBar({
         disabled={redDisabled && redCount > 0}
       />
       <SkillButton
-        color="#9c27b0"
+        color="#ab47bc"
         count={purpleCount}
         onPress={onPurple}
         icon="shuffle"
@@ -76,41 +76,46 @@ function SkillButton({ color, count, onPress, icon, label, testID, disabled }: S
       style={[
         styles.skillBtn,
         {
-          borderColor: isEmpty ? '#555' : color,
-          backgroundColor: isEmpty ? '#1a0e2e' : color + '22',
+          borderColor: isEmpty ? 'rgba(255,255,255,0.1)' : color + '55',
+          backgroundColor: isEmpty ? 'rgba(20,10,40,0.8)' : color + '18',
+          shadowColor: isEmpty ? '#000' : color,
         },
         disabled && styles.btnDisabled,
       ]}
     >
-      {/* Glow ring when has charges */}
-      {!isEmpty && (
-        <View
-          style={[styles.glowRing, { borderColor: color + '55', shadowColor: color }]}
-        />
-      )}
-
-      {/* Icon */}
-      <View style={[
-        styles.iconWrapper,
-        { backgroundColor: isEmpty ? '#252030' : color + '33' },
-      ]}>
+      {/* Icon circle */}
+      <View
+        style={[
+          styles.iconCircle,
+          {
+            backgroundColor: isEmpty ? 'rgba(40,25,70,0.9)' : color + '28',
+            borderColor: isEmpty ? 'rgba(255,255,255,0.08)' : color + '66',
+          },
+        ]}
+      >
         <Feather
           name={icon as any}
-          size={22}
-          color={isEmpty ? '#555' : color}
+          size={20}
+          color={isEmpty ? 'rgba(255,255,255,0.25)' : color}
         />
       </View>
 
       {/* Label */}
-      <Text style={[styles.label, { color: isEmpty ? '#555' : color }]}>{label}</Text>
+      <Text style={[styles.label, { color: isEmpty ? 'rgba(255,255,255,0.25)' : color }]}>
+        {label}
+      </Text>
 
       {/* Count badge */}
-      <View style={[
-        styles.badge,
-        isEmpty ? styles.badgeEmpty : { backgroundColor: color },
-      ]}>
+      <View
+        style={[
+          styles.badge,
+          isEmpty
+            ? styles.badgeEmpty
+            : { backgroundColor: color, shadowColor: color },
+        ]}
+      >
         {isEmpty ? (
-          <Feather name="shopping-cart" size={10} color="#aaa" />
+          <Feather name="shopping-cart" size={9} color="rgba(255,255,255,0.4)" />
         ) : (
           <Text style={styles.badgeText}>{count}</Text>
         )}
@@ -124,72 +129,63 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 22,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
+    gap: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
   skillBtn: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    borderWidth: 2,
+    width: 78,
+    height: 78,
+    borderRadius: 20,
+    borderWidth: 1.5,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
+    gap: 4,
+    shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowRadius: 8,
+    elevation: 6,
   },
   btnDisabled: {
-    opacity: 0.4,
+    opacity: 0.35,
   },
-  glowRing: {
-    position: 'absolute',
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    borderWidth: 1.5,
-    top: -6,
-    left: -6,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.8,
-    shadowRadius: 8,
-    elevation: 0,
-  },
-  iconWrapper: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
   },
   label: {
-    fontSize: 9,
+    fontSize: 10,
     fontWeight: '700',
-    marginTop: 2,
-    letterSpacing: 0.5,
+    letterSpacing: 0.3,
   },
   badge: {
     position: 'absolute',
-    top: -2,
-    right: -2,
-    width: 22,
-    height: 22,
-    borderRadius: 11,
+    top: -5,
+    right: -5,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
     borderColor: '#0d0820',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.6,
+    shadowRadius: 4,
+    elevation: 4,
   },
   badgeEmpty: {
-    backgroundColor: '#2a2040',
-    borderColor: '#555',
+    backgroundColor: 'rgba(40,25,70,0.9)',
+    borderColor: 'rgba(255,255,255,0.1)',
   },
   badgeText: {
     color: '#fff',
-    fontSize: 11,
+    fontSize: 10,
     fontWeight: '900',
   },
 });
