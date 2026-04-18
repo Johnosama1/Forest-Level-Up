@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   ImageBackground,
   Alert,
-  Animated,
   ScrollView,
   Dimensions,
   Platform,
@@ -20,24 +19,16 @@ import { useGame } from '@/context/GameContext';
 import { Tile } from '@/context/GameContext';
 import {
   generateTiles,
-  checkMatch,
   isBoardEmpty,
-  isTrayFull,
   hasTwinsInTray,
   shuffle,
-  getSymbolEmoji,
-  SYMBOL_COLORS,
 } from '@/utils/gameLogic';
 import TileComponent from '@/components/TileComponent';
 import TrayBar from '@/components/TrayBar';
 import SkillsBar from '@/components/SkillsBar';
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
-
-function genId() {
-  return Date.now().toString() + Math.random().toString(36).substr(2, 9);
-}
 
 export default function GameScreen() {
   const { level } = useLocalSearchParams<{ level: string }>();
@@ -52,7 +43,6 @@ export default function GameScreen() {
   const [skillPurple, setSkillPurple] = useState(gameState.skillPurple);
   const [won, setWon] = useState(false);
   const [lost, setLost] = useState(false);
-  const [matchAnim] = useState(new Animated.Value(1));
   const [coinPopup, setCoinPopup] = useState<string | null>(null);
 
   // Sync skills from gameState on mount
@@ -88,31 +78,48 @@ export default function GameScreen() {
     52
   );
 
+  // Insert tile into tray with smart grouping: same symbols stay adjacent
+  const insertIntoTray = useCallback((currentTray: Tile[], newTile: Tile): Tile[] => {
+    // Find the last index of the same symbol in tray
+    let insertIdx = -1;
+    for (let i = currentTray.length - 1; i >= 0; i--) {
+      if (currentTray[i].symbol === newTile.symbol) {
+        insertIdx = i + 1;
+        break;
+      }
+    }
+    if (insertIdx === -1) {
+      return [...currentTray, newTile];
+    }
+    return [
+      ...currentTray.slice(0, insertIdx),
+      newTile,
+      ...currentTray.slice(insertIdx),
+    ];
+  }, []);
+
+  // Remove first 3 occurrences of a symbol from tray
+  const removeMatchFromTray = (currentTray: Tile[], sym: string): Tile[] => {
+    let removed = 0;
+    return currentTray.filter(t => {
+      if (t.symbol === sym && removed < 3) { removed++; return false; }
+      return true;
+    });
+  };
+
   const handleTilePress = useCallback((tile: Tile) => {
     if (won || lost) return;
-    if (isTrayFull(tray) && tray.length >= 7) {
-      // check if tile's symbol would match
-    }
 
-    const newTray = [...tray, tile];
     const newTiles = tiles.filter(t => t.id !== tile.id);
+    const newTray = insertIntoTray(tray, tile);
 
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Check if tray matches (3 of same)
-    const matchedSym = checkMatch(newTray);
-    if (matchedSym) {
-      // Remove matched 3
-      const matchIndices: number[] = [];
-      let count = 0;
-      for (let i = newTray.length - 1; i >= 0 && count < 3; i--) {
-        if (newTray[i].symbol === matchedSym) {
-          matchIndices.push(i);
-          count++;
-        }
-      }
-      const afterMatch = newTray.filter((_, i) => !matchIndices.includes(i));
+    // Count this symbol in the new tray
+    const symCount = newTray.filter(t => t.symbol === tile.symbol).length;
 
+    if (symCount >= 3) {
+      const afterMatch = removeMatchFromTray(newTray, tile.symbol);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       updateCoins(100);
       showCoinPopup('+100');
@@ -128,7 +135,6 @@ export default function GameScreen() {
         }, 300);
       }
     } else {
-      // Check if tray is now full (7 slots)
       if (newTray.length >= 7) {
         setTray(newTray);
         setTiles(newTiles);
@@ -148,7 +154,7 @@ export default function GameScreen() {
         }
       }
     }
-  }, [tray, tiles, won, lost, currentLevel]);
+  }, [tray, tiles, won, lost, currentLevel, insertIntoTray]);
 
   const showCoinPopup = (text: string) => {
     setCoinPopup(text);
@@ -160,12 +166,10 @@ export default function GameScreen() {
     if (skillGreen <= 0) return;
     const twin = hasTwinsInTray(tray);
     if (!twin) {
-      // Find any symbol that has 2 in tray
       Alert.alert('مهارة خضراء', 'تحتاج لاثنين من نفس الشكل في الشريط أولاً');
       return;
     }
     const { symbol } = twin;
-    // Find this symbol in board tiles
     const boardTile = tiles.find(t => t.symbol === symbol);
     if (!boardTile) {
       Alert.alert('مهارة خضراء', 'لا يوجد هذا الشكل في اللوح');
@@ -173,17 +177,13 @@ export default function GameScreen() {
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const newTiles = tiles.filter(t => t.id !== boardTile.id);
-    const newTray = [...tray, boardTile];
-    const matchedSym = checkMatch(newTray);
-    if (matchedSym) {
-      const matchIndices: number[] = [];
-      let count = 0;
-      for (let i = newTray.length - 1; i >= 0 && count < 3; i--) {
-        if (newTray[i].symbol === matchedSym) { matchIndices.push(i); count++; }
-      }
-      const afterMatch = newTray.filter((_, i) => !matchIndices.includes(i));
+    const newTray = insertIntoTray(tray, boardTile);
+    const symCount = newTray.filter(t => t.symbol === symbol).length;
+    if (symCount >= 3) {
+      const afterMatch = removeMatchFromTray(newTray, symbol);
       updateCoins(100);
       showCoinPopup('+100');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTray(afterMatch);
       setTiles(newTiles);
       if (isBoardEmpty(newTiles) && afterMatch.length === 0) {
@@ -194,7 +194,7 @@ export default function GameScreen() {
       setTiles(newTiles);
     }
     setSkillGreen(prev => prev - 1);
-  }, [skillGreen, tray, tiles, currentLevel]);
+  }, [skillGreen, tray, tiles, currentLevel, insertIntoTray]);
 
   // RED SKILL: Remove last placed tile from tray back to board
   const handleRedSkill = useCallback(() => {
@@ -212,30 +212,24 @@ export default function GameScreen() {
   const handlePurpleSkill = useCallback(() => {
     if (skillPurple <= 0) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    // Shuffle board
     const shuffledTiles = shuffle(tiles.map((t, i) => ({
       ...t,
       row: Math.floor(i / gridCols),
       col: i % gridCols,
     })));
 
-    // Try to give a helpful tile if there's a pair in tray
     const twin = hasTwinsInTray(tray);
     if (twin) {
       const helpTile = shuffledTiles.find(t => t.symbol === twin.symbol);
       if (helpTile) {
         const remaining = shuffledTiles.filter(t => t.id !== helpTile.id);
-        const newTray = [...tray, helpTile];
-        const matchedSym = checkMatch(newTray);
-        if (matchedSym) {
-          const matchIndices: number[] = [];
-          let count = 0;
-          for (let i = newTray.length - 1; i >= 0 && count < 3; i--) {
-            if (newTray[i].symbol === matchedSym) { matchIndices.push(i); count++; }
-          }
-          const afterMatch = newTray.filter((_, i) => !matchIndices.includes(i));
+        const newTray = insertIntoTray(tray, helpTile);
+        const symCount = newTray.filter(t => t.symbol === twin.symbol).length;
+        if (symCount >= 3) {
+          const afterMatch = removeMatchFromTray(newTray, twin.symbol);
           updateCoins(100);
           showCoinPopup('+100');
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           setTray(afterMatch);
           setTiles(remaining);
           setSkillPurple(prev => prev - 1);
@@ -249,12 +243,12 @@ export default function GameScreen() {
     }
     setTiles(shuffledTiles);
     setSkillPurple(prev => prev - 1);
-  }, [skillPurple, tiles, tray, gridCols]);
+  }, [skillPurple, tiles, tray, gridCols, insertIntoTray]);
 
   const handleExit = () => {
-    Alert.alert('هل تريد الخروج؟', 'سيتم فقدان تقدمك في هذا المستوى', [
+    Alert.alert('هل تريد الخروج؟', 'هل تريد الخروج من اللعبة؟', [
       { text: 'لا', style: 'cancel' },
-      { text: 'نعم', onPress: () => router.back(), style: 'destructive' },
+      { text: 'نعم', onPress: () => router.replace('/'), style: 'destructive' },
     ]);
   };
 

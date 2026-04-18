@@ -18,3 +18,111 @@ id = "8S6FHzdqBTksO65gV3jz6"
 uri = "file://artifacts/forest-quest/assets/images/level_tower.png"
 type = "image"
 title = "level tower map"
+
+[[generated]]
+id = "Q50FVYk-rDimuKBIvAZNd"
+uri = "file://artifacts/forest-quest/assets/tiles/apple.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "qHm0oNtdj_bUOr7rbQ2L0"
+uri = "file://artifacts/forest-quest/assets/tiles/pear.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "ETFZuY__YMGw132dKc9eT"
+uri = "file://artifacts/forest-quest/assets/tiles/grape.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "d3VLKz1Dbq3D45uPElrUm"
+uri = "file://artifacts/forest-quest/assets/tiles/orange.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "yuzmh1p8q59I3fdUOTQVO"
+uri = "file://artifacts/forest-quest/assets/tiles/lemon.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "t_sZRfSwWtazQJ7pxXZAZ"
+uri = "file://artifacts/forest-quest/assets/tiles/mushroom.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "bKhqH-Y7eOa745n32cLxC"
+uri = "file://artifacts/forest-quest/assets/tiles/leaf.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "_aois0CGIwhahANxWf-Tk"
+uri = "file://artifacts/forest-quest/assets/tiles/acorn.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "IUSrLA29FBnlt8g2gOPD_"
+uri = "file://artifacts/forest-quest/assets/tiles/pinecone.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "pUi9ylRiMj04-fnWrXXF3"
+uri = "file://artifacts/forest-quest/assets/tiles/wolf.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "A3w_ilE3z-BwcMEbAVa7r"
+uri = "file://artifacts/forest-quest/assets/tiles/owl.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "fK03yCh5H-J_ajqk7u5sz"
+uri = "file://artifacts/forest-quest/assets/tiles/deer.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "bpwrXplHE1iaKJSP-_-Tw"
+uri = "file://artifacts/forest-quest/assets/tiles/rabbit.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "dofzSYylwGq7lomuvX9iN"
+uri = "file://artifacts/forest-quest/assets/tiles/rune.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "Vof3XMV_mfViKNFMeaMoD"
+uri = "file://artifacts/forest-quest/assets/tiles/compass.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "9Q8yZpt6i_fbh_0WiMYGr"
+uri = "file://artifacts/forest-quest/assets/tiles/crystal.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "n6v--I6AnDzN_y_HUwM7h"
+uri = "file://artifacts/forest-quest/assets/tiles/bat.png"
+type = "image"
+title = "generated_image"
+
+[[generated]]
+id = "--ea_jqegV3u-nO0dlA45"
+uri = "file://artifacts/forest-quest/assets/tiles/hedgehog.png"
+type = "image"
+title = "generated_image"
