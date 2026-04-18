@@ -356,7 +356,7 @@ export default function GameScreen() {
         />
 
         {/* Tray */}
-        <TrayBar tray={tray} tileSize={tileSize} />
+        <TrayBar tray={tray} />
 
         {/* Win Overlay - auto-navigates back after countdown */}
         {won && (
