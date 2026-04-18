@@ -74,9 +74,12 @@ function generateTutorialBoard(): GameBoard {
 // ── Per-level configuration for smooth difficulty curve ──────────────────
 function getLevelConfig(level: number): { activeCols: number; activeRows: number; depth: number } {
   // Level 1 = tutorial (handled separately)
-  if (level <= 3) {
-    // Very easy: small 3×2 grid, 1 layer deep
-    return { activeCols: 3, activeRows: 2 + level, depth: 1 };
+  if (level === 2) {
+    // Level 2: full 5×7 board, 1 layer deep — first full challenge
+    return { activeCols: 5, activeRows: 7, depth: 1 };
+  } else if (level === 3) {
+    // Level 3: full board, 2 layers
+    return { activeCols: 5, activeRows: 7, depth: 2 };
   } else if (level <= 6) {
     // Easy: 4×3 to 4×5 grid, 1-2 layers
     return { activeCols: 4, activeRows: 3 + level - 3, depth: level <= 4 ? 1 : 2 };

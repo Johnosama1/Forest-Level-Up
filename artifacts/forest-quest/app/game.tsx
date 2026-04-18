@@ -44,7 +44,7 @@ const CONTINUE_COST = 1000;
 
 const HEADER_H = 56;
 const SKILLS_H = 88;
-const TRAY_H   = 82;
+const TRAY_H   = 100; // matches TrayBar actual render height (slot 68px + padding + margins)
 const BOARD_MARGIN = 12;
 const CELL_GAP = 3;
 
@@ -705,12 +705,7 @@ export default function GameScreen() {
                         depth === 0 && styles.cellEmpty,
                       ]}
                     >
-                      {depth === 0 && (
-                        <View style={[styles.fillerTile, {
-                          width: tileSize, height: tileSize,
-                          borderRadius: tileSize * 0.14,
-                        }]} />
-                      )}
+                      {/* empty cell — fully transparent, nothing rendered */}
                       {depth > 0 && (
                         <>
                           {depth >= 3 && (
@@ -1083,7 +1078,7 @@ export default function GameScreen() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
-  overlay: { flex: 1, backgroundColor: 'rgba(8,4,22,0.76)' },
+  overlay: { flex: 1, backgroundColor: 'rgba(8,4,22,0.28)' },
 
   // Header
   header: {
@@ -1164,18 +1159,13 @@ const styles = StyleSheet.create({
 
   // Board
   boardWrapper: {
-    flex: 1, alignItems: 'center', justifyContent: 'center',
+    flex: 1, alignItems: 'center', justifyContent: 'flex-start',
     marginHorizontal: BOARD_MARGIN,
+    paddingTop: 6,
   },
   board: {
-    backgroundColor: 'rgba(12,6,30,0.75)',
-    borderRadius: 22, padding: 10,
-    borderWidth: 1.5, borderColor: 'rgba(120,60,200,0.35)',
-    shadowColor: '#7a30cc',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 16,
-    elevation: 12,
+    backgroundColor: 'transparent',
+    padding: 4,
   },
   boardRow: { flexDirection: 'row', marginBottom: CELL_GAP },
   cell: {

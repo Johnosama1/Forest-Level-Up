@@ -8,7 +8,11 @@ const SCREEN_WIDTH = Dimensions.get('window').width;
 
 const GAP = 5;
 const PADDING = 12;
-const SLOT_SIZE = Math.floor((SCREEN_WIDTH - PADDING * 2 - GAP * (TRAY_SIZE - 1)) / TRAY_SIZE);
+// Cap slot size so the tray doesn't grow huge on wide browser windows
+const SLOT_SIZE = Math.min(
+  Math.floor((SCREEN_WIDTH - PADDING * 2 - GAP * (TRAY_SIZE - 1)) / TRAY_SIZE),
+  68,
+);
 
 const useNative = Platform.OS !== 'web';
 
