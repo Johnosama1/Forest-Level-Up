@@ -71,68 +71,50 @@ function generateTutorialBoard(): GameBoard {
   return board;
 }
 
-// ── Per-level configuration for smooth difficulty curve ──────────────────
-function getLevelConfig(level: number): { activeCols: number; activeRows: number; depth: number } {
-  // Level 1 = tutorial (handled separately)
-  if (level === 2) {
-    // Level 2: full 5×7 board, 1 layer deep — first full challenge
-    return { activeCols: 5, activeRows: 7, depth: 1 };
-  } else if (level === 3) {
-    // Level 3: full board, 2 layers
-    return { activeCols: 5, activeRows: 7, depth: 2 };
-  } else if (level <= 6) {
-    // Easy: 4×3 to 4×5 grid, 1-2 layers
-    return { activeCols: 4, activeRows: 3 + level - 3, depth: level <= 4 ? 1 : 2 };
-  } else if (level <= 15) {
-    // Medium: full 5-col, growing rows, depth 2-3
-    return { activeCols: 5, activeRows: Math.min(4 + Math.floor((level - 7) / 2), 7), depth: level <= 10 ? 2 : 3 };
-  } else if (level <= 50) {
-    // Hard: full board, depth 3-6
-    return { activeCols: 5, activeRows: 7, depth: 3 + Math.floor((level - 15) / 10) };
-  } else {
-    // Very hard: full board, depth grows capped at 10
-    return { activeCols: 5, activeRows: 7, depth: Math.min(7 + Math.floor((level - 50) / 50), 10) };
-  }
+// ── Target tile count per level ──────────────────────────────────────────
+// Level 1 = 9 (tutorial)
+// Level 2 = 51 (~50, nearest multiple of 3)
+// Level 3 = 90 (51 × 1.8, floored to multiple of 3)
+// Each subsequent level × 1.8, capped at 345 (35 cells × ~10 deep)
+function getTargetTiles(level: number): number {
+  if (level === 1) return 9;
+  const MAX_TILES = BOARD_COLS * BOARD_ROWS * 10; // 350 absolute max
+  const raw = 51 * Math.pow(1.8, level - 2);
+  const capped = Math.min(raw, MAX_TILES);
+  return Math.max(Math.floor(capped / 3) * 3, 9);
 }
 
 export function generateBoard(level: number): GameBoard {
   if (level === 1) return generateTutorialBoard();
 
-  const { activeCols, activeRows, depth } = getLevelConfig(level);
+  const targetTiles = getTargetTiles(level);
+  const totalCells = BOARD_COLS * BOARD_ROWS; // 35
 
-  // Determine how many active cells we'll use
-  const activeCells = activeCols * activeRows;
-  const rawTarget = depth * activeCells;
-  // Ensure multiple of 3
-  const targetTiles = Math.max(Math.floor(rawTarget / 3) * 3, 9);
+  // Depth = minimum layers needed to hold all tiles across the full grid
+  const depth = Math.ceil(targetTiles / totalCells);
 
   const { symbols, numSymbols } = getSymbolsForLevel(level);
   const usedSymbols = symbols.slice(0, numSymbols);
   const symbolList = buildSymbolList(targetTiles, usedSymbols);
   const shuffled = shuffle(symbolList);
 
-  // Initialize empty board
+  // Initialize empty full board
   const board: GameBoard = Array.from({ length: BOARD_ROWS }, () =>
     Array.from({ length: BOARD_COLS }, () => [] as Tile[])
   );
 
-  // Center the active area in the board
-  const rowOffset = Math.floor((BOARD_ROWS - activeRows) / 2);
-  const colOffset = Math.floor((BOARD_COLS - activeCols) / 2);
-
-  // Fill stacks layer by layer
+  // Fill layer by layer — earlier layers fill all 35 cells,
+  // final partial layer fills only as many cells as tiles remain
   let idx = 0;
   for (let d = 0; d < depth; d++) {
-    for (let r = 0; r < activeRows; r++) {
-      for (let c = 0; c < activeCols; c++) {
+    for (let r = 0; r < BOARD_ROWS; r++) {
+      for (let c = 0; c < BOARD_COLS; c++) {
         if (idx < shuffled.length) {
-          const br = r + rowOffset;
-          const bc = c + colOffset;
-          board[br][bc].push({
+          board[r][c].push({
             id: generateId(),
             symbol: shuffled[idx++],
-            row: br,
-            col: bc,
+            row: r,
+            col: c,
           });
         }
       }
