@@ -1,14 +1,13 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   ImageBackground,
-  Alert,
-  ScrollView,
   Dimensions,
   Platform,
+  Alert,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,8 +17,10 @@ import * as Haptics from 'expo-haptics';
 import { useGame } from '@/context/GameContext';
 import { Tile } from '@/context/GameContext';
 import {
-  generateTiles,
-  getLevelConfig,
+  generateBoard,
+  GameBoard,
+  BOARD_ROWS,
+  BOARD_COLS,
   isBoardEmpty,
   hasTwinsInTray,
   shuffle,
@@ -28,8 +29,14 @@ import TileComponent from '@/components/TileComponent';
 import TrayBar from '@/components/TrayBar';
 import SkillsBar from '@/components/SkillsBar';
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
+
+const HEADER_H = 56;
+const SKILLS_H = 78;
+const TRAY_H = 82;
+const BOARD_MARGIN = 12;
+const CELL_GAP = 3;
 
 export default function GameScreen() {
   const { level } = useLocalSearchParams<{ level: string }>();
@@ -37,7 +44,7 @@ export default function GameScreen() {
   const insets = useSafeAreaInsets();
   const { gameState, updateCoins, unlockLevel, updateSkills } = useGame();
 
-  const [tiles, setTiles] = useState<Tile[]>([]);
+  const [board, setBoard] = useState<GameBoard>([]);
   const [tray, setTray] = useState<Tile[]>([]);
   const [skillGreen, setSkillGreen] = useState(gameState.skillGreen);
   const [skillRed, setSkillRed] = useState(gameState.skillRed);
@@ -47,11 +54,19 @@ export default function GameScreen() {
   const [coinPopup, setCoinPopup] = useState<string | null>(null);
   const [winCountdown, setWinCountdown] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
-  // Fixed grid dimensions - set once per level, never change as tiles are removed
-  const [gridRows, setGridRows] = useState(8);
-  const [gridCols, setGridCols] = useState(5);
 
-  // Sync skills from gameState on mount
+  const topPad = Platform.OS === 'web' ? 40 : insets.top;
+  const botPad = Platform.OS === 'web' ? 20 : insets.bottom;
+
+  // Calculate tile size so the full 7×5 board fits on screen without overflow
+  const BOARD_PADDING = 16; // board internal padding (8 each side)
+  const EXTRA_MARGIN = 20;  // safety buffer
+  const availH = SCREEN_HEIGHT - topPad - botPad - HEADER_H - SKILLS_H - TRAY_H - BOARD_MARGIN * 2 - BOARD_PADDING - EXTRA_MARGIN;
+  const availW = SCREEN_WIDTH - BOARD_MARGIN * 2 - BOARD_PADDING;
+  const tileSizeByH = Math.floor((availH - (BOARD_ROWS - 1) * CELL_GAP) / BOARD_ROWS);
+  const tileSizeByW = Math.floor((availW - (BOARD_COLS - 1) * CELL_GAP) / BOARD_COLS);
+  const tileSize = Math.min(tileSizeByH, tileSizeByW, 58);
+
   useEffect(() => {
     setSkillGreen(gameState.skillGreen);
     setSkillRed(gameState.skillRed);
@@ -62,7 +77,7 @@ export default function GameScreen() {
     startLevel();
   }, [currentLevel]);
 
-  // When won: count down 2s then auto-go back to level map
+  // Auto-navigate home after winning
   useEffect(() => {
     if (!won) return;
     setWinCountdown(2);
@@ -79,32 +94,26 @@ export default function GameScreen() {
     return () => clearInterval(interval);
   }, [won]);
 
+  useEffect(() => {
+    updateSkills(skillGreen, skillRed, skillPurple);
+  }, [skillGreen, skillRed, skillPurple]);
+
   const startLevel = useCallback(() => {
-    const config = getLevelConfig(currentLevel);
-    setGridRows(config.rows);
-    setGridCols(config.cols);
-    const newTiles = generateTiles(currentLevel);
-    setTiles(newTiles);
+    const newBoard = generateBoard(currentLevel);
+    setBoard(newBoard);
     setTray([]);
     setWon(false);
     setLost(false);
     setShowExitDialog(false);
   }, [currentLevel]);
 
-  // Save skills back to context whenever they change
-  useEffect(() => {
-    updateSkills(skillGreen, skillRed, skillPurple);
-  }, [skillGreen, skillRed, skillPurple]);
+  const showCoinPopup = (text: string) => {
+    setCoinPopup(text);
+    setTimeout(() => setCoinPopup(null), 1200);
+  };
 
-  // Tile size: fixed 5 cols, fit screen width
-  const tileSize = Math.min(
-    Math.floor((SCREEN_WIDTH - 32) / gridCols),
-    56
-  );
-
-  // Insert tile into tray with smart grouping: same symbols stay adjacent
+  // Insert into tray: same symbols grouped adjacent
   const insertIntoTray = useCallback((currentTray: Tile[], newTile: Tile): Tile[] => {
-    // Find the last index of the same symbol in tray
     let insertIdx = -1;
     for (let i = currentTray.length - 1; i >= 0; i--) {
       if (currentTray[i].symbol === newTile.symbol) {
@@ -112,17 +121,10 @@ export default function GameScreen() {
         break;
       }
     }
-    if (insertIdx === -1) {
-      return [...currentTray, newTile];
-    }
-    return [
-      ...currentTray.slice(0, insertIdx),
-      newTile,
-      ...currentTray.slice(insertIdx),
-    ];
+    if (insertIdx === -1) return [...currentTray, newTile];
+    return [...currentTray.slice(0, insertIdx), newTile, ...currentTray.slice(insertIdx)];
   }, []);
 
-  // Remove first 3 occurrences of a symbol from tray
   const removeMatchFromTray = (currentTray: Tile[], sym: string): Tile[] => {
     let removed = 0;
     return currentTray.filter(t => {
@@ -131,61 +133,49 @@ export default function GameScreen() {
     });
   };
 
-  const handleTilePress = useCallback((tile: Tile) => {
+  const handleCellPress = useCallback((row: number, col: number) => {
     if (won || lost) return;
+    const stack = board[row]?.[col];
+    if (!stack || stack.length === 0) return;
 
-    const newTiles = tiles.filter(t => t.id !== tile.id);
-    const newTray = insertIntoTray(tray, tile);
-
+    const topTile = stack[0];
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Count this symbol in the new tray
-    const symCount = newTray.filter(t => t.symbol === tile.symbol).length;
+    // Remove top tile from that cell's stack
+    const newBoard: GameBoard = board.map((r, ri) =>
+      r.map((s, ci) => ri === row && ci === col ? s.slice(1) : [...s])
+    );
 
-    if (symCount >= 3) {
-      const afterMatch = removeMatchFromTray(newTray, tile.symbol);
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const newTray = insertIntoTray(tray, topTile);
+    const matchCount = newTray.filter(t => t.symbol === topTile.symbol).length;
+
+    if (matchCount >= 3) {
+      const afterMatch = removeMatchFromTray(newTray, topTile.symbol);
       updateCoins(100);
-      showCoinPopup('+100');
-
+      showCoinPopup('+100 🪙');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setBoard(newBoard);
       setTray(afterMatch);
-      setTiles(newTiles);
-
-      if (isBoardEmpty(newTiles) && afterMatch.length === 0) {
-        setTimeout(() => {
-          setWon(true);
-          unlockLevel(currentLevel + 1);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-        }, 300);
+      if (isBoardEmpty(newBoard) && afterMatch.length === 0) {
+        setTimeout(() => { setWon(true); unlockLevel(currentLevel + 1); }, 300);
       }
+    } else if (newTray.length >= 7) {
+      setBoard(newBoard);
+      setTray(newTray);
+      setTimeout(() => {
+        setLost(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }, 300);
     } else {
-      if (newTray.length >= 7) {
-        setTray(newTray);
-        setTiles(newTiles);
-        setTimeout(() => {
-          setLost(true);
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-        }, 300);
-      } else {
-        setTray(newTray);
-        setTiles(newTiles);
-
-        if (isBoardEmpty(newTiles) && newTray.length === 0) {
-          setTimeout(() => {
-            setWon(true);
-            unlockLevel(currentLevel + 1);
-          }, 300);
-        }
+      setBoard(newBoard);
+      setTray(newTray);
+      if (isBoardEmpty(newBoard) && newTray.length === 0) {
+        setTimeout(() => { setWon(true); unlockLevel(currentLevel + 1); }, 300);
       }
     }
-  }, [tray, tiles, won, lost, currentLevel, insertIntoTray]);
+  }, [board, tray, won, lost, currentLevel, insertIntoTray]);
 
-  const showCoinPopup = (text: string) => {
-    setCoinPopup(text);
-    setTimeout(() => setCoinPopup(null), 1200);
-  };
-
-  // GREEN SKILL: Completes a pair in tray by adding 3rd tile from board
+  // GREEN: auto-complete a pair in tray using a board tile
   const handleGreenSkill = useCallback(() => {
     if (skillGreen <= 0) return;
     const twin = hasTwinsInTray(tray);
@@ -194,98 +184,105 @@ export default function GameScreen() {
       return;
     }
     const { symbol } = twin;
-    const boardTile = tiles.find(t => t.symbol === symbol);
-    if (!boardTile) {
+    let foundRow = -1, foundCol = -1;
+    outer: for (let r = 0; r < BOARD_ROWS; r++) {
+      for (let c = 0; c < BOARD_COLS; c++) {
+        if (board[r]?.[c]?.[0]?.symbol === symbol) {
+          foundRow = r; foundCol = c;
+          break outer;
+        }
+      }
+    }
+    if (foundRow === -1) {
       Alert.alert('مهارة خضراء', 'لا يوجد هذا الشكل في اللوح');
       return;
     }
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const newTiles = tiles.filter(t => t.id !== boardTile.id);
+    const boardTile = board[foundRow][foundCol][0];
+    const newBoard: GameBoard = board.map((r, ri) =>
+      r.map((s, ci) => ri === foundRow && ci === foundCol ? s.slice(1) : [...s])
+    );
     const newTray = insertIntoTray(tray, boardTile);
     const symCount = newTray.filter(t => t.symbol === symbol).length;
     if (symCount >= 3) {
       const afterMatch = removeMatchFromTray(newTray, symbol);
       updateCoins(100);
-      showCoinPopup('+100');
+      showCoinPopup('+100 🪙');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTray(afterMatch);
-      setTiles(newTiles);
-      if (isBoardEmpty(newTiles) && afterMatch.length === 0) {
+      setBoard(newBoard);
+      if (isBoardEmpty(newBoard) && afterMatch.length === 0) {
         setTimeout(() => { setWon(true); unlockLevel(currentLevel + 1); }, 300);
       }
     } else {
       setTray(newTray);
-      setTiles(newTiles);
+      setBoard(newBoard);
     }
     setSkillGreen(prev => prev - 1);
-  }, [skillGreen, tray, tiles, currentLevel, insertIntoTray]);
+  }, [skillGreen, tray, board, currentLevel, insertIntoTray]);
 
-  // RED SKILL: Remove last placed tile from tray back to board
+  // RED: put last tray tile back on its original cell (top of stack)
   const handleRedSkill = useCallback(() => {
     if (skillRed <= 0 || tray.length === 0) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const lastTile = tray[tray.length - 1];
     const newTray = tray.slice(0, -1);
-    const newTiles = [...tiles, lastTile];
+    const newBoard: GameBoard = board.map((r, ri) =>
+      r.map((s, ci) =>
+        ri === lastTile.row && ci === lastTile.col ? [lastTile, ...s] : [...s]
+      )
+    );
     setTray(newTray);
-    setTiles(newTiles);
+    setBoard(newBoard);
     setSkillRed(prev => prev - 1);
-  }, [skillRed, tray, tiles]);
+  }, [skillRed, tray, board]);
 
-  // PURPLE SKILL: Shuffle symbols among current tile positions (positions stay fixed)
+  // PURPLE: shuffle symbols among top tiles only (positions stay)
   const handlePurpleSkill = useCallback(() => {
     if (skillPurple <= 0) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    // Shuffle the symbols among existing positions, keeping positions fixed
-    const positions = tiles.map(t => ({ row: t.row, col: t.col }));
-    const shuffledPositions = shuffle(positions);
-    const shuffledTiles = tiles.map((t, i) => ({
-      ...t,
-      row: shuffledPositions[i].row,
-      col: shuffledPositions[i].col,
-    }));
-
-    const twin = hasTwinsInTray(tray);
-    if (twin) {
-      const helpTile = shuffledTiles.find(t => t.symbol === twin.symbol);
-      if (helpTile) {
-        const remaining = shuffledTiles.filter(t => t.id !== helpTile.id);
-        const newTray = insertIntoTray(tray, helpTile);
-        const symCount = newTray.filter(t => t.symbol === twin.symbol).length;
-        if (symCount >= 3) {
-          const afterMatch = removeMatchFromTray(newTray, twin.symbol);
-          updateCoins(100);
-          showCoinPopup('+100');
-          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-          setTray(afterMatch);
-          setTiles(remaining);
-          setSkillPurple(prev => prev - 1);
-          return;
+    // Collect all top tiles
+    const topTiles: { row: number; col: number; tile: Tile }[] = [];
+    for (let r = 0; r < BOARD_ROWS; r++) {
+      for (let c = 0; c < BOARD_COLS; c++) {
+        if (board[r]?.[c]?.length > 0) {
+          topTiles.push({ row: r, col: c, tile: board[r][c][0] });
         }
-        setTray(newTray);
-        setTiles(remaining);
-        setSkillPurple(prev => prev - 1);
-        return;
       }
     }
-    setTiles(shuffledTiles);
+    // Shuffle their positions
+    const shuffledPositions = shuffle(topTiles.map(t => ({ row: t.row, col: t.col })));
+    const newBoard: GameBoard = board.map(r => r.map(s => [...s]));
+    topTiles.forEach((item, i) => {
+      const newPos = shuffledPositions[i];
+      // Move this tile to newPos
+      newBoard[newPos.row][newPos.col][0] = { ...item.tile, row: newPos.row, col: newPos.col };
+    });
+    // Restore original positions with shuffled tiles
+    const shuffledTiles = shuffle(topTiles.map(t => t.tile));
+    topTiles.forEach((item, i) => {
+      newBoard[item.row][item.col][0] = { ...shuffledTiles[i], row: item.row, col: item.col };
+    });
+    setBoard(newBoard);
     setSkillPurple(prev => prev - 1);
-  }, [skillPurple, tiles, tray, gridCols, insertIntoTray]);
+  }, [skillPurple, board]);
 
-  const handleExit = () => {
-    setShowExitDialog(true);
-  };
+  const handleExit = () => setShowExitDialog(true);
 
-  const topPad = Platform.OS === 'web' ? 67 : insets.top;
-  const botPad = Platform.OS === 'web' ? 34 : insets.bottom;
+  // Count remaining tiles for progress display
+  const remaining = useMemo(() =>
+    board.reduce((sum, row) => sum + row.reduce((s, stack) => s + stack.length, 0), 0),
+    [board]
+  );
 
   return (
     <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
       <View style={[styles.overlay, { paddingTop: topPad, paddingBottom: botPad }]}>
+
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={handleExit} style={styles.exitBtn} testID="exit-btn">
-            <Feather name="x" size={22} color="#f5a623" />
+            <Feather name="x" size={20} color="#f5a623" />
           </TouchableOpacity>
           <Text style={styles.levelText}>المستوى {currentLevel}</Text>
           <View style={styles.coinsBadge}>
@@ -300,51 +297,71 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* Game Grid - fixed positions, empty slots stay in place */}
-        <ScrollView
-          style={styles.gridScroll}
-          contentContainerStyle={styles.gridContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={[styles.gridContainer, { borderRadius: 16 }]}>
-            {Array.from({ length: gridRows }).map((_, row) => (
-              <View key={row} style={styles.gridRow}>
-                {Array.from({ length: gridCols }).map((_, col) => {
-                  const tile = tiles.find(t => t.row === row && t.col === col);
-                  if (tile) {
-                    return (
-                      <TileComponent
-                        key={tile.id}
-                        tile={tile}
-                        size={tileSize}
-                        onPress={handleTilePress}
-                        disabled={won || lost}
-                      />
-                    );
-                  }
-                  // Empty slot — keep the space
+        {/* Fixed Game Board — no scroll, all in one screen */}
+        <View style={styles.boardWrapper}>
+          <View style={styles.board}>
+            {Array.from({ length: BOARD_ROWS }).map((_, row) => (
+              <View key={row} style={styles.boardRow}>
+                {Array.from({ length: BOARD_COLS }).map((_, col) => {
+                  const stack = board[row]?.[col] || [];
+                  const topTile = stack[0];
+                  const depth = stack.length;
+
                   return (
-                    <View
-                      key={`empty-${row}-${col}`}
-                      style={{
-                        width: tileSize,
-                        height: tileSize,
-                        margin: 2,
-                        borderRadius: 10,
-                        backgroundColor: 'rgba(255,255,255,0.04)',
-                        borderWidth: 1,
-                        borderColor: 'rgba(255,255,255,0.06)',
-                        borderStyle: 'dashed',
-                      }}
-                    />
+                    <TouchableOpacity
+                      key={`${row}-${col}`}
+                      activeOpacity={depth > 0 ? 0.7 : 1}
+                      onPress={() => handleCellPress(row, col)}
+                      disabled={won || lost || depth === 0}
+                      style={[
+                        styles.cell,
+                        {
+                          width: tileSize,
+                          height: tileSize,
+                          borderRadius: tileSize * 0.14,
+                        },
+                        depth === 0 && styles.cellEmpty,
+                      ]}
+                    >
+                      {depth > 0 && (
+                        <>
+                          {/* Depth shadows behind the tile */}
+                          {depth >= 3 && (
+                            <View style={[styles.depthLayer2, {
+                              width: tileSize - 8, height: tileSize - 8,
+                              borderRadius: tileSize * 0.12,
+                            }]} />
+                          )}
+                          {depth >= 2 && (
+                            <View style={[styles.depthLayer1, {
+                              width: tileSize - 4, height: tileSize - 4,
+                              borderRadius: tileSize * 0.13,
+                            }]} />
+                          )}
+                          {/* Top tile */}
+                          <TileComponent
+                            tile={topTile}
+                            size={tileSize}
+                            onPress={() => handleCellPress(row, col)}
+                            disabled={won || lost}
+                          />
+                          {/* Stack count badge */}
+                          {depth > 1 && (
+                            <View style={styles.stackBadge}>
+                              <Text style={styles.stackBadgeText}>×{depth}</Text>
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </TouchableOpacity>
                   );
                 })}
               </View>
             ))}
           </View>
-        </ScrollView>
+        </View>
 
-        {/* Skills */}
+        {/* Skills Bar */}
         <SkillsBar
           greenCount={skillGreen}
           redCount={skillRed}
@@ -358,7 +375,7 @@ export default function GameScreen() {
         {/* Tray */}
         <TrayBar tray={tray} />
 
-        {/* Win Overlay - auto-navigates back after countdown */}
+        {/* Win Overlay */}
         {won && (
           <View style={styles.resultOverlay}>
             <View style={styles.resultCard}>
@@ -368,12 +385,8 @@ export default function GameScreen() {
               <View style={styles.countdownWrap}>
                 <Text style={styles.countdownText}>العودة للخريطة خلال {winCountdown}...</Text>
               </View>
-              <TouchableOpacity
-                style={styles.nextBtn}
-                onPress={() => router.back()}
-                testID="next-level-btn"
-              >
-                <Text style={styles.nextBtnText}>العودة للخريطة الآن ←</Text>
+              <TouchableOpacity style={styles.nextBtn} onPress={() => router.back()}>
+                <Text style={styles.nextBtnText}>العودة الآن ←</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -405,17 +418,11 @@ export default function GameScreen() {
               <Text style={styles.resultSub}>سيتم فقدان تقدمك في هذا المستوى</Text>
               <TouchableOpacity
                 style={styles.nextBtn}
-                onPress={() => {
-                  setShowExitDialog(false);
-                  router.back();
-                }}
+                onPress={() => { setShowExitDialog(false); router.back(); }}
               >
                 <Text style={styles.nextBtnText}>نعم، اخرج</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.mapBtn}
-                onPress={() => setShowExitDialog(false)}
-              >
+              <TouchableOpacity style={styles.mapBtn} onPress={() => setShowExitDialog(false)}>
                 <Text style={styles.mapBtnText}>لا، استمر</Text>
               </TouchableOpacity>
             </View>
@@ -430,19 +437,20 @@ const styles = StyleSheet.create({
   bg: { flex: 1 },
   overlay: {
     flex: 1,
-    backgroundColor: 'rgba(10,5,25,0.75)',
+    backgroundColor: 'rgba(10,5,25,0.72)',
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 6,
+    height: HEADER_H,
   },
   exitBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: 34,
+    height: 34,
+    borderRadius: 17,
     backgroundColor: '#2d1b4ecc',
     borderWidth: 1,
     borderColor: '#f5a62366',
@@ -451,27 +459,25 @@ const styles = StyleSheet.create({
   },
   levelText: {
     color: '#f5e6d3',
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: '700',
-    fontFamily: 'Inter_700Bold',
   },
   coinsBadge: {
     backgroundColor: '#2d1b4ecc',
     borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
     borderWidth: 1,
     borderColor: '#f5a62366',
   },
   coinsText: {
     color: '#f5a623',
     fontWeight: '700',
-    fontSize: 14,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 13,
   },
   coinPopup: {
     position: 'absolute',
-    top: 100,
+    top: 90,
     alignSelf: 'center',
     backgroundColor: '#f5a623',
     borderRadius: 20,
@@ -482,29 +488,72 @@ const styles = StyleSheet.create({
   coinPopupText: {
     color: '#1a0e2e',
     fontWeight: '900',
-    fontSize: 20,
+    fontSize: 18,
   },
-  gridScroll: {
+  boardWrapper: {
     flex: 1,
-    marginHorizontal: 8,
-  },
-  gridContent: {
-    paddingVertical: 8,
     alignItems: 'center',
+    justifyContent: 'center',
+    marginHorizontal: BOARD_MARGIN,
   },
-  gridContainer: {
-    backgroundColor: 'rgba(30,15,60,0.7)',
+  board: {
+    backgroundColor: 'rgba(20,10,45,0.6)',
+    borderRadius: 18,
     padding: 8,
     borderWidth: 1,
-    borderColor: '#4a307066',
+    borderColor: '#4a307055',
   },
-  gridRow: {
+  boardRow: {
     flexDirection: 'row',
+    marginBottom: CELL_GAP,
+  },
+  cell: {
+    marginRight: CELL_GAP,
+    alignItems: 'center',
     justifyContent: 'center',
+    overflow: 'visible',
+  },
+  cellEmpty: {
+    backgroundColor: 'rgba(255,255,255,0.03)',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.07)',
+  },
+  depthLayer2: {
+    position: 'absolute',
+    backgroundColor: 'rgba(100,60,180,0.25)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,166,35,0.2)',
+    top: 6,
+    left: 6,
+  },
+  depthLayer1: {
+    position: 'absolute',
+    backgroundColor: 'rgba(100,60,180,0.35)',
+    borderWidth: 1,
+    borderColor: 'rgba(245,166,35,0.3)',
+    top: 3,
+    left: 3,
+  },
+  stackBadge: {
+    position: 'absolute',
+    top: 2,
+    right: 2,
+    backgroundColor: '#f5a623',
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    paddingVertical: 1,
+    minWidth: 18,
+    alignItems: 'center',
+    zIndex: 10,
+  },
+  stackBadgeText: {
+    color: '#1a0e2e',
+    fontSize: 9,
+    fontWeight: '900',
   },
   resultOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(10,5,25,0.85)',
+    backgroundColor: 'rgba(10,5,25,0.88)',
     alignItems: 'center',
     justifyContent: 'center',
     zIndex: 100,
@@ -512,67 +561,64 @@ const styles = StyleSheet.create({
   resultCard: {
     backgroundColor: '#2d1b4e',
     borderRadius: 24,
-    padding: 32,
+    padding: 28,
     alignItems: 'center',
     borderWidth: 2,
     borderColor: '#f5a623',
-    width: SCREEN_WIDTH * 0.8,
+    width: SCREEN_WIDTH * 0.82,
   },
-  resultEmoji: { fontSize: 56, marginBottom: 12 },
+  resultEmoji: { fontSize: 52, marginBottom: 10 },
   resultTitle: {
     color: '#f5e6d3',
-    fontSize: 26,
+    fontSize: 24,
     fontWeight: '800',
-    fontFamily: 'Inter_700Bold',
-    marginBottom: 8,
+    marginBottom: 6,
   },
   resultSub: {
     color: '#9b8ec4',
-    fontSize: 16,
-    marginBottom: 24,
+    fontSize: 15,
+    marginBottom: 20,
+  },
+  countdownWrap: {
+    backgroundColor: 'rgba(245,166,35,0.15)',
+    borderRadius: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 5,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#f5a62355',
+  },
+  countdownText: {
+    color: '#f5a623',
+    fontSize: 13,
+    fontWeight: '600',
   },
   nextBtn: {
     backgroundColor: '#f5a623',
-    borderRadius: 14,
-    paddingHorizontal: 28,
-    paddingVertical: 13,
+    borderRadius: 13,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
     width: '100%',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 10,
   },
   nextBtnText: {
     color: '#1a0e2e',
     fontWeight: '800',
-    fontSize: 16,
-    fontFamily: 'Inter_700Bold',
+    fontSize: 15,
   },
   mapBtn: {
     borderWidth: 1.5,
-    borderColor: '#f5a62366',
-    borderRadius: 14,
-    paddingHorizontal: 28,
-    paddingVertical: 11,
+    borderColor: '#f5a62355',
+    borderRadius: 13,
+    paddingHorizontal: 24,
+    paddingVertical: 10,
     width: '100%',
     alignItems: 'center',
-  },
-  countdownWrap: {
-    backgroundColor: 'rgba(245,166,35,0.15)',
-    borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#f5a62366',
-  },
-  countdownText: {
-    color: '#f5a623',
-    fontSize: 14,
-    fontWeight: '600',
-    textAlign: 'center',
   },
   mapBtnText: {
     color: '#f5a623',
     fontWeight: '700',
-    fontSize: 15,
+    fontSize: 14,
   },
 });
