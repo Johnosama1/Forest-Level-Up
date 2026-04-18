@@ -345,12 +345,6 @@ export default function GameScreen() {
                             onPress={() => handleCellPress(row, col)}
                             disabled={won || lost}
                           />
-                          {/* Stack count badge */}
-                          {depth > 1 && (
-                            <View style={styles.stackBadge}>
-                              <Text style={styles.stackBadgeText}>×{depth}</Text>
-                            </View>
-                          )}
                         </>
                       )}
                     </TouchableOpacity>
