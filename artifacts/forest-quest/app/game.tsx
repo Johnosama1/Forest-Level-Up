@@ -31,7 +31,6 @@ import TileComponent from '@/components/TileComponent';
 import TrayBar from '@/components/TrayBar';
 import SkillsBar from '@/components/SkillsBar';
 import TutorialOverlay from '@/components/TutorialOverlay';
-import ProfilePanel, { ProfileAvatarBtn } from '@/components/ProfilePanel';
 import AnimatedTrees from '@/components/AnimatedTrees';
 import { useForestAmbient } from '@/hooks/useForestAmbient';
 
@@ -91,7 +90,6 @@ export default function GameScreen() {
   const [showExitDialog, setShowExitDialog] = useState(false);
   // Show tutorial on level 1 only
   const [showTutorial,  setShowTutorial]  = useState(currentLevel === 1);
-  const [showProfile,   setShowProfile]   = useState(false);
 
   // Ambient forest sound — driven by profile.soundEnabled
   const { profile } = useGame();
@@ -420,7 +418,6 @@ export default function GameScreen() {
               <View style={styles.exitBtnGlow} pointerEvents="none" />
               <Feather name="x" size={22} color="#ff6b6b" />
             </TouchableOpacity>
-            <ProfileAvatarBtn onPress={() => setShowProfile(true)} />
           </View>
           <Text style={styles.levelText}>المستوى {currentLevel}</Text>
           <View style={styles.coinsBadge}>
@@ -664,8 +661,6 @@ export default function GameScreen() {
           <TutorialOverlay onDone={() => setShowTutorial(false)} />
         )}
 
-        {/* ── Profile Panel ── */}
-        <ProfilePanel visible={showProfile} onClose={() => setShowProfile(false)} />
 
         {/* ── Exit Dialog ── */}
         {showExitDialog && (
