@@ -34,12 +34,12 @@ interface GameContextType {
   resetGame: () => void;
 }
 
-const SAVE_VERSION = '3'; // bump this to force-reset all players
+const SAVE_VERSION = '4'; // bump this to force-reset all players
 
 const defaultGameState: GameState = {
   currentLevel: 1,
   unlockedLevel: 1,
-  coins: 0,
+  coins: 2000,
   skillGreen: 3,
   skillRed: 3,
   skillPurple: 3,
