@@ -23,8 +23,15 @@ export interface GameState {
   skillPurple: number;
 }
 
+export interface PlayerProfile {
+  username: string;
+  playerId: string;
+  soundEnabled: boolean;
+}
+
 interface GameContextType {
   gameState: GameState;
+  profile: PlayerProfile;
   updateCoins: (amount: number) => void;
   updateLevel: (level: number) => void;
   unlockLevel: (level: number) => void;
@@ -32,9 +39,23 @@ interface GameContextType {
   buySkill: (type: 'green' | 'red' | 'purple') => boolean;
   saveGame: () => void;
   resetGame: () => void;
+  updateUsername: (name: string) => void;
+  toggleSound: () => void;
 }
 
-const SAVE_VERSION = '4'; // bump this to force-reset all players
+const SAVE_VERSION = '4';
+const PROFILE_KEY  = 'forest_quest_profile';
+
+function generateUsername(): string {
+  const num = Math.floor(1000 + Math.random() * 9000);
+  return `مستخدم${num}`;
+}
+
+function generatePlayerId(): string {
+  const ts  = Date.now().toString(36).toUpperCase();
+  const rnd = Math.random().toString(36).substr(2, 6).toUpperCase();
+  return `FQ-${ts}-${rnd}`;
+}
 
 const defaultGameState: GameState = {
   currentLevel: 1,
@@ -45,32 +66,54 @@ const defaultGameState: GameState = {
   skillPurple: 3,
 };
 
+const defaultProfile: PlayerProfile = {
+  username: generateUsername(),
+  playerId: generatePlayerId(),
+  soundEnabled: true,
+};
+
 const GameContext = createContext<GameContextType | null>(null);
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
   const [gameState, setGameState] = useState<GameState>(defaultGameState);
+  const [profile,   setProfile]   = useState<PlayerProfile>(defaultProfile);
 
   useEffect(() => {
-    loadGame();
+    loadAll();
   }, []);
 
-  const loadGame = async () => {
+  const loadAll = async () => {
     try {
+      // Load game save
       const saved = await AsyncStorage.getItem('forest_quest_save');
       if (saved) {
         const parsed = JSON.parse(saved);
-        // Version mismatch → discard old save, start fresh
         if (parsed._v !== SAVE_VERSION) {
           await AsyncStorage.removeItem('forest_quest_save');
-          return;
+        } else {
+          const { _v, ...state } = parsed;
+          setGameState(prev => ({ ...prev, ...state }));
         }
-        const { _v, ...state } = parsed;
-        setGameState({ ...defaultGameState, ...state });
+      }
+
+      // Load player profile (persists across save resets)
+      const savedProfile = await AsyncStorage.getItem(PROFILE_KEY);
+      if (savedProfile) {
+        setProfile(prev => ({ ...prev, ...JSON.parse(savedProfile) }));
+      } else {
+        // First launch — persist the auto-generated profile
+        await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(defaultProfile));
       }
     } catch (e) {
-      console.warn('Failed to load game:', e);
+      console.warn('Failed to load:', e);
     }
   };
+
+  const saveProfile = useCallback(async (p: PlayerProfile) => {
+    try {
+      await AsyncStorage.setItem(PROFILE_KEY, JSON.stringify(p));
+    } catch (_) {}
+  }, []);
 
   const saveGame = useCallback(async () => {
     try {
@@ -80,9 +123,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     }
   }, [gameState]);
 
-  useEffect(() => {
-    saveGame();
-  }, [gameState]);
+  useEffect(() => { saveGame(); }, [gameState]);
 
   const updateCoins = useCallback((amount: number) => {
     setGameState(prev => ({ ...prev, coins: Math.max(0, prev.coins + amount) }));
@@ -100,20 +141,15 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const updateSkills = useCallback((green: number, red: number, purple: number) => {
-    setGameState(prev => ({
-      ...prev,
-      skillGreen: green,
-      skillRed: red,
-      skillPurple: purple,
-    }));
+    setGameState(prev => ({ ...prev, skillGreen: green, skillRed: red, skillPurple: purple }));
   }, []);
 
   const buySkill = useCallback((type: 'green' | 'red' | 'purple'): boolean => {
     if (gameState.coins < 1000) return false;
     setGameState(prev => {
       const newState = { ...prev, coins: prev.coins - 1000 };
-      if (type === 'green') newState.skillGreen = prev.skillGreen + 1;
-      if (type === 'red') newState.skillRed = prev.skillRed + 1;
+      if (type === 'green')  newState.skillGreen  = prev.skillGreen  + 1;
+      if (type === 'red')    newState.skillRed    = prev.skillRed    + 1;
       if (type === 'purple') newState.skillPurple = prev.skillPurple + 1;
       return newState;
     });
@@ -127,9 +163,26 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     setGameState({ ...defaultGameState });
   }, []);
 
+  const updateUsername = useCallback((name: string) => {
+    setProfile(prev => {
+      const next = { ...prev, username: name };
+      saveProfile(next);
+      return next;
+    });
+  }, [saveProfile]);
+
+  const toggleSound = useCallback(() => {
+    setProfile(prev => {
+      const next = { ...prev, soundEnabled: !prev.soundEnabled };
+      saveProfile(next);
+      return next;
+    });
+  }, [saveProfile]);
+
   return (
     <GameContext.Provider value={{
       gameState,
+      profile,
       updateCoins,
       updateLevel,
       unlockLevel,
@@ -137,6 +190,8 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
       buySkill,
       saveGame,
       resetGame,
+      updateUsername,
+      toggleSound,
     }}>
       {children}
     </GameContext.Provider>

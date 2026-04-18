@@ -16,6 +16,9 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import { useGame } from '@/context/GameContext';
+import ProfilePanel, { ProfileAvatarBtn } from '@/components/ProfilePanel';
+import AnimatedTrees from '@/components/AnimatedTrees';
+import { useForestAmbient } from '@/hooks/useForestAmbient';
 
 const { width: rawW, height: H } = Dimensions.get('window');
 // Cap width so nodes stay within screen on any platform/orientation
@@ -198,7 +201,7 @@ const LevelNode = memo(({ level, cx, cy, state, pulse, onPress }: NodeProps) => 
 
 // ── Main Screen ───────────────────────────────────────────
 export default function LevelMapScreen() {
-  const { gameState, resetGame } = useGame();
+  const { gameState, resetGame, profile } = useGame();
   const insets = useSafeAreaInsets();
   const topPad = Platform.OS === 'web' ? 10 : insets.top;
   const botPad = Platform.OS === 'web' ? 16 : insets.bottom;
@@ -209,8 +212,11 @@ export default function LevelMapScreen() {
   const unlocked    = gameState.unlockedLevel;
   const useNative   = Platform.OS !== 'web';
 
-  const [showMapExit, setShowMapExit]       = useState(false);
+  const [showMapExit,      setShowMapExit]      = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [showProfile,      setShowProfile]      = useState(false);
+
+  useForestAmbient(profile.soundEnabled);
   const resetScale = useRef(new Animated.Value(0)).current;
 
   // Animate exit popup in
@@ -291,6 +297,7 @@ export default function LevelMapScreen() {
 
   return (
     <ImageBackground source={BG} style={{ flex: 1 }} resizeMode="cover">
+      <AnimatedTrees />
 
       {/* Dark atmospheric overlay */}
       <View style={StyleSheet.absoluteFill} pointerEvents="none">
@@ -305,18 +312,8 @@ export default function LevelMapScreen() {
         </View>
 
         <View style={styles.headerButtons}>
-          {/* Reset button — restarts game from scratch */}
-          <TouchableOpacity
-            style={styles.resetBtn}
-            onPress={() => {
-              Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-              setShowResetConfirm(true);
-            }}
-            activeOpacity={0.75}
-            testID="map-reset-btn"
-          >
-            <Feather name="refresh-ccw" size={17} color="#f5a623" />
-          </TouchableOpacity>
+          {/* Profile avatar button */}
+          <ProfileAvatarBtn onPress={() => setShowProfile(true)} />
 
           {/* X button — exits the entire app */}
           <TouchableOpacity
@@ -490,6 +487,9 @@ export default function LevelMapScreen() {
           </Animated.View>
         </View>
       )}
+
+      {/* ── Profile Panel ── */}
+      <ProfilePanel visible={showProfile} onClose={() => setShowProfile(false)} />
 
     </ImageBackground>
   );

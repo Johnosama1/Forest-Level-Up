@@ -31,6 +31,9 @@ import TileComponent from '@/components/TileComponent';
 import TrayBar from '@/components/TrayBar';
 import SkillsBar from '@/components/SkillsBar';
 import TutorialOverlay from '@/components/TutorialOverlay';
+import ProfilePanel, { ProfileAvatarBtn } from '@/components/ProfilePanel';
+import AnimatedTrees from '@/components/AnimatedTrees';
+import { useForestAmbient } from '@/hooks/useForestAmbient';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
@@ -87,7 +90,12 @@ export default function GameScreen() {
   const [winCountdown, setWinCountdown] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
   // Show tutorial on level 1 only
-  const [showTutorial, setShowTutorial] = useState(currentLevel === 1);
+  const [showTutorial,  setShowTutorial]  = useState(currentLevel === 1);
+  const [showProfile,   setShowProfile]   = useState(false);
+
+  // Ambient forest sound — driven by profile.soundEnabled
+  const { profile } = useGame();
+  useForestAmbient(profile.soundEnabled);
 
   // ── Skill purchase popup ──────────────────────────────
   const [skillPopup, setSkillPopup]   = useState<SkillType | null>(null);
@@ -397,19 +405,23 @@ export default function GameScreen() {
 
   return (
     <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
+      <AnimatedTrees />
       <View style={[styles.overlay, { paddingTop: topPad, paddingBottom: botPad }]}>
 
         {/* ── Header ── */}
         <View style={styles.header}>
-          <TouchableOpacity
-            onPress={() => setShowExitDialog(true)}
-            style={styles.exitBtn}
-            testID="exit-btn"
-            activeOpacity={0.75}
-          >
-            <View style={styles.exitBtnGlow} pointerEvents="none" />
-            <Feather name="x" size={22} color="#ff6b6b" />
-          </TouchableOpacity>
+          <View style={styles.headerLeft}>
+            <TouchableOpacity
+              onPress={() => setShowExitDialog(true)}
+              style={styles.exitBtn}
+              testID="exit-btn"
+              activeOpacity={0.75}
+            >
+              <View style={styles.exitBtnGlow} pointerEvents="none" />
+              <Feather name="x" size={22} color="#ff6b6b" />
+            </TouchableOpacity>
+            <ProfileAvatarBtn onPress={() => setShowProfile(true)} />
+          </View>
           <Text style={styles.levelText}>المستوى {currentLevel}</Text>
           <View style={styles.coinsBadge}>
             <Text style={styles.coinsText}>🪙 {gameState.coins.toLocaleString()}</Text>
@@ -652,6 +664,9 @@ export default function GameScreen() {
           <TutorialOverlay onDone={() => setShowTutorial(false)} />
         )}
 
+        {/* ── Profile Panel ── */}
+        <ProfilePanel visible={showProfile} onClose={() => setShowProfile(false)} />
+
         {/* ── Exit Dialog ── */}
         {showExitDialog && (
           <View style={styles.exitOverlay}>
@@ -717,6 +732,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     height: HEADER_H,
     zIndex: 50,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   exitBtn: {
     width: 40, height: 40, borderRadius: 20,
