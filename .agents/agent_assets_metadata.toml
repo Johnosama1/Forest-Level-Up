@@ -1,0 +1,20 @@
+uploads = []
+outputs = []
+
+[[generated]]
+id = "Srz2MEeCO1ZwYEy7Bg4uS"
+uri = "file://artifacts/forest-quest/assets/images/icon.png"
+type = "image"
+title = "forest quest game icon"
+
+[[generated]]
+id = "HwBrxEt-40CEDNZ8hb0ff"
+uri = "file://artifacts/forest-quest/assets/images/background.png"
+type = "image"
+title = "forest night background"
+
+[[generated]]
+id = "8S6FHzdqBTksO65gV3jz6"
+uri = "file://artifacts/forest-quest/assets/images/level_tower.png"
+type = "image"
+title = "level tower map"
