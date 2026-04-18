@@ -31,7 +31,8 @@ import SkillsBar from '@/components/SkillsBar';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
-const SKILL_COST = 1000;
+const SKILL_COST = 200;
+const CONTINUE_COST = 1000;
 
 const HEADER_H = 56;
 const SKILLS_H = 88;
@@ -80,6 +81,7 @@ export default function GameScreen() {
   const [notEnoughCoins, setNotEnoughCoins] = useState(false);
   const popupScale = useRef(new Animated.Value(0)).current;
   const exitScale  = useRef(new Animated.Value(0)).current;
+  const lostScale  = useRef(new Animated.Value(0)).current;
 
   const topPad = Platform.OS === 'web' ? 40 : insets.top;
   const botPad = Platform.OS === 'web' ? 20 : insets.bottom;
@@ -114,6 +116,16 @@ export default function GameScreen() {
       }).start();
     }
   }, [showExitDialog]);
+
+  // Lost popup appear animation
+  useEffect(() => {
+    if (lost) {
+      lostScale.setValue(0);
+      Animated.spring(lostScale, {
+        toValue: 1, useNativeDriver: useNative, bounciness: 14, speed: 12,
+      }).start();
+    }
+  }, [lost]);
 
   // Auto-navigate home after winning
   useEffect(() => {
@@ -178,8 +190,8 @@ export default function GameScreen() {
 
     if (matchCnt >= 3) {
       const afterMatch = removeMatchFromTray(newTray, topTile.symbol);
-      updateCoins(100);
-      showCoinPopup('+100 🪙');
+      updateCoins(20);
+      showCoinPopup('+20 🪙');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setBoard(newBoard);
       setTray(afterMatch);
@@ -223,7 +235,7 @@ export default function GameScreen() {
     const cnt = newTray.filter(t => t.symbol === symbol).length;
     if (cnt >= 3) {
       const afterMatch = removeMatchFromTray(newTray, symbol);
-      updateCoins(100); showCoinPopup('+100 🪙');
+      updateCoins(20); showCoinPopup('+20 🪙');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTray(afterMatch); setBoard(newBoard);
       if (isBoardEmpty(newBoard) && afterMatch.length === 0) {
@@ -523,18 +535,52 @@ export default function GameScreen() {
 
         {/* ── Lose Overlay ── */}
         {lost && (
-          <View style={styles.resultOverlay}>
-            <View style={styles.resultCard}>
-              <Text style={styles.resultEmoji}>💀</Text>
-              <Text style={styles.resultTitle}>انتهت اللعبة</Text>
-              <Text style={styles.resultSub}>الشريط ممتلئ!</Text>
-              <TouchableOpacity style={styles.nextBtn} onPress={startLevel} testID="retry-btn">
-                <Text style={styles.nextBtnText}>إعادة المحاولة</Text>
+          <View style={styles.lostOverlay}>
+            <Animated.View style={[styles.lostCard, { transform: [{ scale: lostScale }] }]}>
+              {/* Gold accent bar at top */}
+              <View style={styles.lostAccentBar} />
+
+              {/* Icon */}
+              <View style={styles.lostIconCircle}>
+                <Text style={{ fontSize: 42 }}>💀</Text>
+              </View>
+
+              <Text style={styles.lostTitle}>انتهت الدور</Text>
+              <Text style={styles.lostSub}>الشريط ممتلئ — ماذا تريد أن تفعل؟</Text>
+
+              <View style={styles.lostDivider} />
+
+              {/* كمل الدور */}
+              <TouchableOpacity
+                style={[
+                  styles.lostBtnContinue,
+                  gameState.coins < CONTINUE_COST && styles.lostBtnDisabled,
+                ]}
+                activeOpacity={0.8}
+                testID="continue-btn"
+                onPress={() => {
+                  if (gameState.coins < CONTINUE_COST) return;
+                  updateCoins(-CONTINUE_COST);
+                  startLevel();
+                }}
+              >
+                <Text style={styles.lostBtnContinueText}>
+                  كمل الدور بمقابل {CONTINUE_COST.toLocaleString()} عملة
+                </Text>
+                {gameState.coins < CONTINUE_COST && (
+                  <Text style={styles.lostBtnNotEnough}>عملاتك غير كافية</Text>
+                )}
               </TouchableOpacity>
-              <TouchableOpacity style={styles.mapBtn} onPress={() => router.back()}>
-                <Text style={styles.mapBtnText}>خريطة المستويات</Text>
+
+              {/* خريطة المستويات */}
+              <TouchableOpacity
+                style={styles.lostBtnMap}
+                activeOpacity={0.8}
+                onPress={() => router.back()}
+              >
+                <Text style={styles.lostBtnMapText}>خريطة المستويات</Text>
               </TouchableOpacity>
-            </View>
+            </Animated.View>
           </View>
         )}
 
@@ -822,6 +868,81 @@ const styles = StyleSheet.create({
     width: '100%', alignItems: 'center',
   },
   mapBtnText: { color: '#f5a623', fontWeight: '700', fontSize: 14 },
+
+  // ── Lose Overlay (انتهت الدور) ─────────────────────────
+  lostOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5,2,18,0.90)',
+    alignItems: 'center', justifyContent: 'center',
+    zIndex: 200,
+  },
+  lostCard: {
+    width: SCREEN_WIDTH * 0.85,
+    backgroundColor: '#0e0a22',
+    borderRadius: 26, borderWidth: 2,
+    borderColor: '#f5a62355',
+    alignItems: 'center',
+    paddingBottom: 26,
+    overflow: 'hidden',
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3, shadowRadius: 24, elevation: 24,
+  },
+  lostAccentBar: {
+    width: '100%', height: 4,
+    backgroundColor: '#f5a623', marginBottom: 26,
+  },
+  lostIconCircle: {
+    width: 84, height: 84, borderRadius: 42,
+    backgroundColor: '#2a1600',
+    borderWidth: 2, borderColor: '#f5a62355',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 18,
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4, shadowRadius: 14, elevation: 10,
+  },
+  lostTitle: {
+    color: '#f5e6d3', fontSize: 24, fontWeight: '900',
+    textAlign: 'center', marginBottom: 8,
+  },
+  lostSub: {
+    color: '#7a6aaa', fontSize: 13, textAlign: 'center',
+    marginBottom: 22, paddingHorizontal: 20,
+  },
+  lostDivider: {
+    width: '80%', height: 1,
+    backgroundColor: '#f5a62318', marginBottom: 22,
+  },
+  lostBtnContinue: {
+    width: '88%',
+    backgroundColor: '#c87d12',
+    borderRadius: 16, paddingVertical: 16,
+    alignItems: 'center', marginBottom: 12,
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.45, shadowRadius: 10, elevation: 8,
+  },
+  lostBtnDisabled: {
+    backgroundColor: '#2a1e0a',
+    shadowOpacity: 0,
+  },
+  lostBtnContinueText: {
+    color: '#fff', fontWeight: '900', fontSize: 15, textAlign: 'center',
+  },
+  lostBtnNotEnough: {
+    color: '#ff8888', fontSize: 11, marginTop: 4, textAlign: 'center',
+  },
+  lostBtnMap: {
+    width: '88%',
+    backgroundColor: 'transparent',
+    borderRadius: 16, borderWidth: 2,
+    borderColor: '#f5a62344',
+    paddingVertical: 14, alignItems: 'center',
+  },
+  lostBtnMapText: {
+    color: '#f5a623', fontWeight: '800', fontSize: 15,
+  },
 
   // ── Premium Exit Dialog ──────────────────────────────
   exitOverlay: {
