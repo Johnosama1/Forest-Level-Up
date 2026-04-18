@@ -33,6 +33,8 @@ interface GameContextType {
   saveGame: () => void;
 }
 
+const SAVE_VERSION = '3'; // bump this to force-reset all players
+
 const defaultGameState: GameState = {
   currentLevel: 1,
   unlockedLevel: 1,
@@ -55,7 +57,14 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     try {
       const saved = await AsyncStorage.getItem('forest_quest_save');
       if (saved) {
-        setGameState(JSON.parse(saved));
+        const parsed = JSON.parse(saved);
+        // Version mismatch → discard old save, start fresh
+        if (parsed._v !== SAVE_VERSION) {
+          await AsyncStorage.removeItem('forest_quest_save');
+          return;
+        }
+        const { _v, ...state } = parsed;
+        setGameState({ ...defaultGameState, ...state });
       }
     } catch (e) {
       console.warn('Failed to load game:', e);
@@ -64,7 +73,7 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
 
   const saveGame = useCallback(async () => {
     try {
-      await AsyncStorage.setItem('forest_quest_save', JSON.stringify(gameState));
+      await AsyncStorage.setItem('forest_quest_save', JSON.stringify({ ...gameState, _v: SAVE_VERSION }));
     } catch (e) {
       console.warn('Failed to save game:', e);
     }

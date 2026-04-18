@@ -28,6 +28,7 @@ import {
 import TileComponent from '@/components/TileComponent';
 import TrayBar from '@/components/TrayBar';
 import SkillsBar from '@/components/SkillsBar';
+import TutorialOverlay from '@/components/TutorialOverlay';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
@@ -73,6 +74,8 @@ export default function GameScreen() {
   const [coinPopup, setCoinPopup]       = useState<string | null>(null);
   const [winCountdown, setWinCountdown] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
+  // Show tutorial on level 1 only
+  const [showTutorial, setShowTutorial] = useState(currentLevel === 1);
 
   // ── Skill purchase popup ──────────────────────────────
   const [skillPopup, setSkillPopup]   = useState<SkillType | null>(null);
@@ -582,6 +585,11 @@ export default function GameScreen() {
               </TouchableOpacity>
             </Animated.View>
           </View>
+        )}
+
+        {/* ── Tutorial (level 1 only) ── */}
+        {showTutorial && (
+          <TutorialOverlay onDone={() => setShowTutorial(false)} />
         )}
 
         {/* ── Exit Dialog ── */}

@@ -52,7 +52,28 @@ function buildSymbolList(target: number, usedSymbols: TileSymbol[]): TileSymbol[
   return list.slice(0, target);
 }
 
+// ── Tutorial board for level 1 — 9 tiles only (3 × 3 symbols) ──────────
+function generateTutorialBoard(): GameBoard {
+  const board: GameBoard = Array.from({ length: BOARD_ROWS }, () =>
+    Array.from({ length: BOARD_COLS }, () => [] as Tile[])
+  );
+  const syms: TileSymbol[] = ['apple','apple','apple','pear','pear','pear','grape','grape','grape'];
+  const s = shuffle(syms);
+  // Place 9 tiles in a 3×3 block centred in the bottom-middle of the board
+  const positions: [number, number][] = [
+    [3,1],[3,2],[3,3],
+    [4,1],[4,2],[4,3],
+    [5,1],[5,2],[5,3],
+  ];
+  positions.forEach(([r, c], i) => {
+    board[r][c].push({ id: generateId(), symbol: s[i], row: r, col: c });
+  });
+  return board;
+}
+
 export function generateBoard(level: number): GameBoard {
+  if (level === 1) return generateTutorialBoard();
+
   const totalCells = BOARD_COLS * BOARD_ROWS; // 35
   // Depth grows with level: level 1 → ~1 deep, level 2 → ~2 deep, etc. Cap at 10
   const depthPerCell = Math.min(level, 10);
