@@ -155,6 +155,26 @@ export default function GameScreen() {
     setSkillPopup(null);
   }, [currentLevel]);
 
+  // Continue from current board position — clear tray and remove 3 tiles from top
+  const continueLevel = useCallback(() => {
+    setBoard(prev => {
+      const next: GameBoard = prev.map(r => r.map(s => [...s]));
+      let removed = 0;
+      outer: for (let r = 0; r < BOARD_ROWS; r++) {
+        for (let c = 0; c < BOARD_COLS; c++) {
+          if (next[r][c].length > 0 && removed < 3) {
+            next[r][c] = next[r][c].slice(1);
+            removed++;
+            if (removed === 3) break outer;
+          }
+        }
+      }
+      return next;
+    });
+    setTray([]);
+    setLost(false);
+  }, []);
+
   const showCoinPopup = (text: string) => {
     setCoinPopup(text);
     setTimeout(() => setCoinPopup(null), 1200);
@@ -199,20 +219,18 @@ export default function GameScreen() {
       setBoard(newBoard);
       setTray(afterMatch);
       if (isBoardEmpty(newBoard) && afterMatch.length === 0) {
-        setTimeout(() => { setWon(true); unlockLevel(currentLevel + 1); }, 300);
+        setWon(true); unlockLevel(currentLevel + 1);
       }
     } else if (newTray.length >= 7) {
       setBoard(newBoard);
       setTray(newTray);
-      setTimeout(() => {
-        setLost(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      }, 300);
+      setLost(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } else {
       setBoard(newBoard);
       setTray(newTray);
       if (isBoardEmpty(newBoard) && newTray.length === 0) {
-        setTimeout(() => { setWon(true); unlockLevel(currentLevel + 1); }, 300);
+        setWon(true); unlockLevel(currentLevel + 1);
       }
     }
   }, [board, tray, won, lost, currentLevel, insertIntoTray]);
@@ -242,7 +260,7 @@ export default function GameScreen() {
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTray(afterMatch); setBoard(newBoard);
       if (isBoardEmpty(newBoard) && afterMatch.length === 0) {
-        setTimeout(() => { setWon(true); unlockLevel(currentLevel + 1); }, 300);
+        setWon(true); unlockLevel(currentLevel + 1);
       }
     } else {
       setTray(newTray); setBoard(newBoard);
@@ -383,6 +401,7 @@ export default function GameScreen() {
                     <TouchableOpacity
                       key={`${row}-${col}`}
                       activeOpacity={depth > 0 ? 0.7 : 1}
+                      delayPressIn={0}
                       onPress={() => handleCellPress(row, col)}
                       disabled={won || lost || depth === 0}
                       style={[
@@ -564,7 +583,7 @@ export default function GameScreen() {
                 onPress={() => {
                   if (gameState.coins < CONTINUE_COST) return;
                   updateCoins(-CONTINUE_COST);
-                  startLevel();
+                  continueLevel();
                 }}
               >
                 <Text style={styles.lostBtnContinueText}>
