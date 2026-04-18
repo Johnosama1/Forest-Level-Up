@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, memo } from 'react';
+import React, { useRef, useEffect, useCallback, memo, useState } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,7 @@ import {
   Dimensions,
   Platform,
   Animated,
+  BackHandler,
 } from 'react-native';
 import { router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -201,11 +202,35 @@ export default function LevelMapScreen() {
   const topPad = Platform.OS === 'web' ? 10 : insets.top;
   const botPad = Platform.OS === 'web' ? 16 : insets.bottom;
 
-  const scrollRef = useRef<ScrollView>(null);
-  const pulse = useRef(new Animated.Value(1)).current;
-  const unlocked = gameState.unlockedLevel;
+  const scrollRef   = useRef<ScrollView>(null);
+  const pulse       = useRef(new Animated.Value(1)).current;
+  const exitScale   = useRef(new Animated.Value(0)).current;
+  const unlocked    = gameState.unlockedLevel;
+  const useNative   = Platform.OS !== 'web';
 
-  const useNative = Platform.OS !== 'web';
+  const [showMapExit, setShowMapExit] = useState(false);
+
+  // Animate exit popup in
+  useEffect(() => {
+    if (showMapExit) {
+      exitScale.setValue(0);
+      Animated.spring(exitScale, {
+        toValue: 1, useNativeDriver: useNative, bounciness: 12, speed: 14,
+      }).start();
+    }
+  }, [showMapExit]);
+
+  // Close app handler
+  const handleExitApp = useCallback(() => {
+    setShowMapExit(false);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS === 'android') {
+      BackHandler.exitApp();
+    } else if (Platform.OS === 'web') {
+      try { (window as any).close(); } catch (_) {}
+    }
+    // iOS: no programmatic exit — nothing we can do, popup just closes
+  }, []);
 
   // Pulsing glow for current level
   useEffect(() => {
@@ -265,9 +290,20 @@ export default function LevelMapScreen() {
           <Text style={styles.coinsLabel}>العملات الذهبية</Text>
           <Text style={styles.coinsValue}>🪙 {gameState.coins.toLocaleString()}</Text>
         </View>
-        <View style={styles.headerRight}>
-          <Text style={styles.headerHint}>اضغط على المستوى للعب</Text>
-        </View>
+
+        {/* X button — exits the entire app */}
+        <TouchableOpacity
+          style={styles.mapExitBtn}
+          onPress={() => {
+            Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+            setShowMapExit(true);
+          }}
+          activeOpacity={0.75}
+          testID="map-exit-btn"
+        >
+          <View style={styles.mapExitBtnGlow} pointerEvents="none" />
+          <Feather name="x" size={20} color="#ff6b6b" />
+        </TouchableOpacity>
       </View>
 
       {/* ── Scrollable Tower Map ── */}
@@ -336,6 +372,52 @@ export default function LevelMapScreen() {
         </TouchableOpacity>
       </View>
 
+      {/* ══ Map Exit Confirmation Popup ══ */}
+      {showMapExit && (
+        <View style={styles.mapExitOverlay}>
+          <Animated.View style={[styles.mapExitCard, { transform: [{ scale: exitScale }] }]}>
+
+            {/* Red accent bar at top */}
+            <View style={styles.mapExitAccentBar} />
+
+            {/* Icon */}
+            <View style={styles.mapExitIconCircle}>
+              <Feather name="power" size={34} color="#ff6b6b" />
+            </View>
+
+            <Text style={styles.mapExitTitle}>هل تريد الخروج من اللعبة؟</Text>
+            <Text style={styles.mapExitSub}>ستُحفظ تقدمك في المستويات</Text>
+
+            <View style={styles.mapExitDivider} />
+
+            {/* Buttons row */}
+            <View style={styles.mapExitBtnRow}>
+              {/* نعم — exits app */}
+              <TouchableOpacity
+                style={styles.mapExitBtnYes}
+                activeOpacity={0.8}
+                onPress={handleExitApp}
+              >
+                <Text style={styles.mapExitBtnYesText}>نعم</Text>
+              </TouchableOpacity>
+
+              {/* لا — stays on map */}
+              <TouchableOpacity
+                style={styles.mapExitBtnNo}
+                activeOpacity={0.8}
+                onPress={() => {
+                  setShowMapExit(false);
+                  Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                }}
+              >
+                <Text style={styles.mapExitBtnNoText}>لا</Text>
+              </TouchableOpacity>
+            </View>
+
+          </Animated.View>
+        </View>
+      )}
+
     </ImageBackground>
   );
 }
@@ -370,14 +452,111 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
-  headerRight: {
-    alignItems: 'flex-end',
-    justifyContent: 'center',
+  // Map-screen X exit button
+  mapExitBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    backgroundColor: '#1e0818cc',
+    borderWidth: 2, borderColor: '#ff6b6b55',
+    alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.55,
+    shadowRadius: 8,
+    elevation: 8,
+    position: 'relative',
   },
-  headerHint: {
-    color: '#9b8ec4',
-    fontSize: 11,
-    fontStyle: 'italic',
+  mapExitBtnGlow: {
+    position: 'absolute',
+    width: 50, height: 50, borderRadius: 25,
+    borderWidth: 1.5, borderColor: '#ff6b6b28',
+    top: -5, left: -5,
+  },
+
+  // Map exit popup overlay
+  mapExitOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5,2,18,0.88)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    zIndex: 500,
+  },
+  mapExitCard: {
+    width: Math.min(rawW, 430) * 0.85,
+    backgroundColor: '#100820',
+    borderRadius: 26,
+    borderWidth: 2,
+    borderColor: '#ff6b6b55',
+    alignItems: 'center',
+    paddingBottom: 26,
+    overflow: 'hidden',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.35,
+    shadowRadius: 24,
+    elevation: 24,
+  },
+  mapExitAccentBar: {
+    width: '100%', height: 4,
+    backgroundColor: '#ff6b6b',
+    marginBottom: 28,
+  },
+  mapExitIconCircle: {
+    width: 78, height: 78, borderRadius: 39,
+    backgroundColor: '#ff6b6b15',
+    borderWidth: 2, borderColor: '#ff6b6b55',
+    alignItems: 'center', justifyContent: 'center',
+    marginBottom: 18,
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.45,
+    shadowRadius: 14,
+    elevation: 10,
+  },
+  mapExitTitle: {
+    color: '#f5e6d3',
+    fontSize: 20, fontWeight: '900',
+    textAlign: 'center',
+    paddingHorizontal: 20, marginBottom: 8,
+  },
+  mapExitSub: {
+    color: '#7a6aaa',
+    fontSize: 13, textAlign: 'center',
+    marginBottom: 22, paddingHorizontal: 20,
+  },
+  mapExitDivider: {
+    width: '80%', height: 1,
+    backgroundColor: '#ff6b6b18',
+    marginBottom: 22,
+  },
+  mapExitBtnRow: {
+    flexDirection: 'row',
+    gap: 14,
+    paddingHorizontal: 24,
+    width: '100%',
+  },
+  mapExitBtnYes: {
+    flex: 1,
+    backgroundColor: '#ff6b6b',
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: 'center',
+    shadowColor: '#ff6b6b',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.5, shadowRadius: 10,
+    elevation: 8,
+  },
+  mapExitBtnYesText: {
+    color: '#fff', fontWeight: '900', fontSize: 17, letterSpacing: 1,
+  },
+  mapExitBtnNo: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderRadius: 14, borderWidth: 2,
+    borderColor: '#f5a62344',
+    paddingVertical: 15, alignItems: 'center',
+  },
+  mapExitBtnNoText: {
+    color: '#f5a623', fontWeight: '800', fontSize: 17, letterSpacing: 1,
   },
 
   // Tower spine
