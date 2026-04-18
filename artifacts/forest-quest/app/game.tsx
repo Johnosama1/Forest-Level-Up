@@ -80,6 +80,7 @@ export default function GameScreen() {
   const [skillRed, setSkillRed]       = useState(3);
   const [skillPurple, setSkillPurple] = useState(3);
 
+  const [trayHistory, setTrayHistory]   = useState<string[]>([]); // tile IDs in add order
   const [won, setWon]                   = useState(false);
   const [lost, setLost]                 = useState(false);
   const [coinPopup, setCoinPopup]       = useState<string | null>(null);
@@ -157,6 +158,7 @@ export default function GameScreen() {
   const startLevel = useCallback(() => {
     setBoard(generateBoard(currentLevel));
     setTray([]);
+    setTrayHistory([]);
     setWon(false);
     setLost(false);
     setShowExitDialog(false);
@@ -166,24 +168,35 @@ export default function GameScreen() {
     setSkillPopup(null);
   }, [currentLevel]);
 
-  // Continue from current board position — clear tray and remove 3 tiles from top
+  // Return the last 3 tiles from tray back to their original board positions
   const continueLevel = useCallback(() => {
+    // Identify last 3 tile IDs added to tray
+    const last3Ids = new Set(trayHistory.slice(-3));
+
+    const tilesToReturn: Tile[] = [];
+    const remainingTray: Tile[] = [];
+    // Preserve original tray order for the remaining tiles
+    tray.forEach(t => {
+      if (last3Ids.has(t.id) && tilesToReturn.length < 3) {
+        tilesToReturn.push(t);
+      } else {
+        remainingTray.push(t);
+      }
+    });
+
+    // Put tiles back on top of their original board stacks
     setBoard(prev => {
       const next: GameBoard = prev.map(r => r.map(s => [...s]));
-      let removed = 0;
-      for (let r = 0; r < BOARD_ROWS && removed < 3; r++) {
-        for (let c = 0; c < BOARD_COLS && removed < 3; c++) {
-          if (next[r][c].length > 0) {
-            next[r][c] = next[r][c].slice(1);
-            removed++;
-          }
-        }
-      }
+      tilesToReturn.forEach(t => {
+        next[t.row][t.col] = [{ ...t }, ...next[t.row][t.col]];
+      });
       return next;
     });
-    setTray([]);
+
+    setTray(remainingTray);
+    setTrayHistory(prev => prev.slice(0, -3));
     setLost(false);
-  }, []);
+  }, [tray, trayHistory]);
 
   const showCoinPopup = (text: string) => {
     setCoinPopup(text);
@@ -218,32 +231,44 @@ export default function GameScreen() {
     const newBoard: GameBoard = board.map((r, ri) =>
       r.map((s, ci) => ri === row && ci === col ? s.slice(1) : [...s])
     );
-    const newTray  = insertIntoTray(tray, topTile);
-    const matchCnt = newTray.filter(t => t.symbol === topTile.symbol).length;
+    const newTray    = insertIntoTray(tray, topTile);
+    const newHistory = [...trayHistory, topTile.id];
+    const matchCnt   = newTray.filter(t => t.symbol === topTile.symbol).length;
 
     if (matchCnt >= 3) {
-      const afterMatch = removeMatchFromTray(newTray, topTile.symbol);
+      // Identify exactly the 3 matched tile IDs to remove from history
+      let cnt = 0;
+      const matchedIds = new Set<string>();
+      for (const t of newTray) {
+        if (t.symbol === topTile.symbol && cnt < 3) { matchedIds.add(t.id); cnt++; }
+      }
+      const afterMatch   = newTray.filter(t => !matchedIds.has(t.id));
+      const afterHistory = newHistory.filter(id => !matchedIds.has(id));
+
       updateCoins(20);
       showCoinPopup('+20 🪙');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setBoard(newBoard);
       setTray(afterMatch);
+      setTrayHistory(afterHistory);
       if (isBoardEmpty(newBoard) && afterMatch.length === 0) {
         setWon(true); unlockLevel(currentLevel + 1);
       }
     } else if (newTray.length >= 7) {
       setBoard(newBoard);
       setTray(newTray);
+      setTrayHistory(newHistory);
       setLost(true);
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     } else {
       setBoard(newBoard);
       setTray(newTray);
+      setTrayHistory(newHistory);
       if (isBoardEmpty(newBoard) && newTray.length === 0) {
         setWon(true); unlockLevel(currentLevel + 1);
       }
     }
-  }, [board, tray, won, lost, currentLevel, insertIntoTray]);
+  }, [board, tray, trayHistory, won, lost, currentLevel, insertIntoTray]);
 
   // ── Skill execution helpers ───────────────────────────
   const execGreen = useCallback(() => {
@@ -420,21 +445,12 @@ export default function GameScreen() {
                         depth === 0 && styles.cellEmpty,
                       ]}
                     >
-                      {depth === 0 && (() => {
-                        const fi = (row * BOARD_COLS + col) % 3;
-                        return (
-                          <View style={[styles.fillerTile, {
-                            width: tileSize, height: tileSize,
-                            borderRadius: tileSize * 0.18,
-                          }]}>
-                            <Image
-                              source={FILLER_IMAGES[fi]}
-                              style={{ width: tileSize * 0.45, height: tileSize * 0.45, opacity: 0.25 }}
-                              resizeMode="contain"
-                            />
-                          </View>
-                        );
-                      })()}
+                      {depth === 0 && (
+                        <View style={[styles.fillerTile, {
+                          width: tileSize, height: tileSize,
+                          borderRadius: tileSize * 0.14,
+                        }]} />
+                      )}
                       {depth > 0 && (
                         <>
                           {depth >= 3 && (
@@ -592,8 +608,8 @@ export default function GameScreen() {
                 <Text style={{ fontSize: 42 }}>💀</Text>
               </View>
 
-              <Text style={styles.lostTitle}>انتهت الدور</Text>
-              <Text style={styles.lostSub}>الشريط ممتلئ — ماذا تريد أن تفعل؟</Text>
+              <Text style={styles.lostTitle}>الشريط ممتلئ!</Text>
+              <Text style={styles.lostSub}>ادفع {CONTINUE_COST.toLocaleString()} عملة لإعادة آخر 3 قطع للوح</Text>
 
               <View style={styles.lostDivider} />
 
@@ -612,7 +628,7 @@ export default function GameScreen() {
                 }}
               >
                 <Text style={styles.lostBtnContinueText}>
-                  كمل الدور بمقابل {CONTINUE_COST.toLocaleString()} عملة
+                  🔄 أعد آخر 3 قطع للوح · {CONTINUE_COST.toLocaleString()} عملة
                 </Text>
                 {gameState.coins < CONTINUE_COST && (
                   <Text style={styles.lostBtnNotEnough}>عملاتك غير كافية</Text>
@@ -756,11 +772,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fillerTile: {
-    borderWidth: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255,255,255,0.04)',
-    borderRadius: 10,
+    backgroundColor: 'transparent',
   },
   depthLayer2: {
     position: 'absolute',
