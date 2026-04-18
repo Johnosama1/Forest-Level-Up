@@ -44,6 +44,8 @@ export default function GameScreen() {
   const [won, setWon] = useState(false);
   const [lost, setLost] = useState(false);
   const [coinPopup, setCoinPopup] = useState<string | null>(null);
+  const [winCountdown, setWinCountdown] = useState(0);
+  const [showExitDialog, setShowExitDialog] = useState(false);
 
   // Sync skills from gameState on mount
   useEffect(() => {
@@ -55,6 +57,23 @@ export default function GameScreen() {
   useEffect(() => {
     startLevel();
   }, [currentLevel]);
+
+  // When won: count down 2s then auto-go back to level map
+  useEffect(() => {
+    if (!won) return;
+    setWinCountdown(2);
+    const interval = setInterval(() => {
+      setWinCountdown(prev => {
+        if (prev <= 1) {
+          clearInterval(interval);
+          router.back();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [won]);
 
   const startLevel = useCallback(() => {
     const newTiles = generateTiles(currentLevel);
@@ -246,10 +265,7 @@ export default function GameScreen() {
   }, [skillPurple, tiles, tray, gridCols, insertIntoTray]);
 
   const handleExit = () => {
-    Alert.alert('هل تريد الخروج؟', 'هل تريد الخروج من اللعبة؟', [
-      { text: 'لا', style: 'cancel' },
-      { text: 'نعم', onPress: () => router.replace('/'), style: 'destructive' },
-    ]);
+    setShowExitDialog(true);
   };
 
   const topPad = Platform.OS === 'web' ? 67 : insets.top;
@@ -313,22 +329,22 @@ export default function GameScreen() {
         {/* Tray */}
         <TrayBar tray={tray} tileSize={tileSize} />
 
-        {/* Win Overlay */}
+        {/* Win Overlay - auto-navigates back after countdown */}
         {won && (
           <View style={styles.resultOverlay}>
             <View style={styles.resultCard}>
               <Text style={styles.resultEmoji}>🏆</Text>
               <Text style={styles.resultTitle}>رائع! فزت!</Text>
               <Text style={styles.resultSub}>المستوى {currentLevel} مكتمل</Text>
+              <View style={styles.countdownWrap}>
+                <Text style={styles.countdownText}>العودة للخريطة خلال {winCountdown}...</Text>
+              </View>
               <TouchableOpacity
                 style={styles.nextBtn}
-                onPress={() => router.replace({ pathname: '/game', params: { level: currentLevel + 1 } })}
+                onPress={() => router.back()}
                 testID="next-level-btn"
               >
-                <Text style={styles.nextBtnText}>المستوى التالي ←</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.mapBtn} onPress={() => router.back()}>
-                <Text style={styles.mapBtnText}>خريطة المستويات</Text>
+                <Text style={styles.nextBtnText}>العودة للخريطة الآن ←</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -346,6 +362,32 @@ export default function GameScreen() {
               </TouchableOpacity>
               <TouchableOpacity style={styles.mapBtn} onPress={() => router.back()}>
                 <Text style={styles.mapBtnText}>خريطة المستويات</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
+        {/* Exit Dialog */}
+        {showExitDialog && (
+          <View style={styles.resultOverlay}>
+            <View style={styles.resultCard}>
+              <Text style={styles.resultEmoji}>🚪</Text>
+              <Text style={styles.resultTitle}>الخروج من اللعبة؟</Text>
+              <Text style={styles.resultSub}>سيتم فقدان تقدمك في هذا المستوى</Text>
+              <TouchableOpacity
+                style={styles.nextBtn}
+                onPress={() => {
+                  setShowExitDialog(false);
+                  router.back();
+                }}
+              >
+                <Text style={styles.nextBtnText}>نعم، اخرج</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.mapBtn}
+                onPress={() => setShowExitDialog(false)}
+              >
+                <Text style={styles.mapBtnText}>لا، استمر</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -483,6 +525,21 @@ const styles = StyleSheet.create({
     paddingVertical: 11,
     width: '100%',
     alignItems: 'center',
+  },
+  countdownWrap: {
+    backgroundColor: 'rgba(245,166,35,0.15)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#f5a62366',
+  },
+  countdownText: {
+    color: '#f5a623',
+    fontSize: 14,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   mapBtnText: {
     color: '#f5a623',
