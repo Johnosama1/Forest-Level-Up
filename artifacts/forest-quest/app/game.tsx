@@ -162,9 +162,8 @@ export default function GameScreen() {
     }
   }, [lost]);
 
-  // Keep drag refs in sync with latest values
+  // Keep drag tile ref in sync with latest value
   useEffect(() => { dragTileRef.current = dragTile; }, [dragTile]);
-  useEffect(() => { handleCellPressRef.current = handleCellPress; }, [handleCellPress]);
 
   // PanResponder for the drag overlay — created once, reads via refs
   const dragOverlayPR = useRef(
@@ -396,6 +395,8 @@ export default function GameScreen() {
       }
     }
   }, [board, tray, trayHistory, won, lost, currentLevel, insertIntoTray, addToInventory]);
+  // Keep the PanResponder ref in sync — must be after handleCellPress is defined
+  handleCellPressRef.current = handleCellPress;
 
   // ── Skill execution helpers ───────────────────────────
   const execGreen = useCallback(() => {
@@ -606,6 +607,9 @@ export default function GameScreen() {
                             size={tileSize}
                             onPress={() => handleCellPress(row, col)}
                             disabled={won || lost}
+                            highlighted={
+                              dragTile?.row === row && dragTile?.col === col
+                            }
                           />
                         </>
                       )}
@@ -885,6 +889,8 @@ export default function GameScreen() {
                 size={tileSize + 8}
                 onPress={() => {}}
                 disabled
+                animate={false}
+                highlighted
               />
             </Animated.View>
 

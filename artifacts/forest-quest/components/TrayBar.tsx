@@ -65,6 +65,7 @@ export default function TrayBar({ tray }: TrayBarProps) {
                   size={SLOT_SIZE}
                   onPress={() => {}}
                   disabled
+                  animate={false}
                 />
               ) : (
                 <View style={[styles.emptySlotInner, { borderRadius: SLOT_SIZE * 0.18 }]} />
