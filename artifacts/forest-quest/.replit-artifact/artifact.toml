@@ -3,15 +3,17 @@ previewPath = "/"
 title = "Forest Quest"
 version = "1.0.0"
 id = "artifacts/forest-quest"
+router = "expo-domain"
 
 [[integratedSkills]]
 name = "expo"
 version = "1.0.0"
 
 [[services]]
+ensurePreviewReachable = "/status"
 name = "expo"
 paths = [ "/" ]
-localPort = 8081
+localPort = 22605
 
 [services.development]
 run = "pnpm --filter @workspace/forest-quest run dev"
@@ -21,5 +23,5 @@ build = [ "pnpm", "--filter", "@workspace/forest-quest", "run", "build" ]
 run = [ "pnpm", "--filter", "@workspace/forest-quest", "run", "serve" ]
 
 [services.env]
-PORT = "8081"
+PORT = "22605"
 BASE_PATH = "/"
