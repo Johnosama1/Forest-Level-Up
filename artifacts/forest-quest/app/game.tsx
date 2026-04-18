@@ -422,17 +422,14 @@ export default function GameScreen() {
                     >
                       {depth === 0 && (() => {
                         const fi = (row * BOARD_COLS + col) % 3;
-                        const fc = FILLER_COLORS[fi];
                         return (
                           <View style={[styles.fillerTile, {
                             width: tileSize, height: tileSize,
                             borderRadius: tileSize * 0.18,
-                            backgroundColor: fc + '2a',
-                            borderColor: fc + '99',
                           }]}>
                             <Image
                               source={FILLER_IMAGES[fi]}
-                              style={{ width: tileSize * 0.78, height: tileSize * 0.78 }}
+                              style={{ width: tileSize * 0.45, height: tileSize * 0.45, opacity: 0.25 }}
                               resizeMode="contain"
                             />
                           </View>
@@ -759,14 +756,11 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   fillerTile: {
-    borderWidth: 2,
+    borderWidth: 0,
     alignItems: 'center',
     justifyContent: 'center',
-    elevation: 2,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.2,
-    shadowRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.04)',
+    borderRadius: 10,
   },
   depthLayer2: {
     position: 'absolute',
