@@ -26,7 +26,7 @@ const STEPS: Step[] = [
     iconColor: '#f5a623',
     emoji: '🌲',
     title: 'مرحباً في Forest Quest!',
-    body: 'سنعلمك كيف تلعب في 5 خطوات سهلة. هذا المستوى الأول تجريبي فقط.',
+    body: 'هذا المستوى الأول تجريبي فقط.',
   },
   {
     icon: 'mouse-pointer',
