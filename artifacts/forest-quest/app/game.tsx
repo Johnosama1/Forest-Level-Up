@@ -102,8 +102,8 @@ export default function GameScreen() {
   const dragPosX = useRef(new Animated.Value(0)).current;
   const dragPosY = useRef(new Animated.Value(0)).current;
   const trayYRef = useRef(0);
-  const dragTileRef = useRef<typeof dragTile>(null);
-  const handleCellPressRef = useRef(handleCellPress);
+  const dragTileRef = useRef<{ tile: Tile; row: number; col: number } | null>(null);
+  const handleCellPressRef = useRef<((row: number, col: number) => void) | null>(null);
 
   // Ambient forest sound — driven by profile.soundEnabled
   const { profile } = useGame();
@@ -180,7 +180,7 @@ export default function GameScreen() {
         const dropY = e.nativeEvent.pageY;
         // Use measured tray position if available, otherwise bottom 30% of screen
         const threshold = trayYRef.current > 0 ? trayYRef.current - 60 : SCREEN_HEIGHT * 0.65;
-        if (info && dropY >= threshold) {
+        if (info && dropY >= threshold && handleCellPressRef.current) {
           handleCellPressRef.current(info.row, info.col);
         }
         setDragTile(null);
@@ -631,9 +631,13 @@ export default function GameScreen() {
         {/* ── Tray ── */}
         <View
           onLayout={(e) => {
-            e.target.measure((_x: number, _y: number, _w: number, _h: number, _px: number, py: number) => {
-              trayYRef.current = py;
-            });
+            try {
+              if (typeof (e.target as any)?.measure === 'function') {
+                (e.target as any).measure((_x: number, _y: number, _w: number, _h: number, _px: number, py: number) => {
+                  if (typeof py === 'number') trayYRef.current = py;
+                });
+              }
+            } catch {}
           }}
         >
           <TrayBar tray={tray} />

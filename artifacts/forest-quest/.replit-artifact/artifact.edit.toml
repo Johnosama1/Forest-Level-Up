@@ -1,7 +1,0 @@
-version = 2
-kind = "mobile"
-title = "Forest Quest"
-
-[services.expo]
-path = "/"
-dev = "pnpm --filter @workspace/forest-quest run dev"
