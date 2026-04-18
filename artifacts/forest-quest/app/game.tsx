@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -7,7 +7,7 @@ import {
   ImageBackground,
   Dimensions,
   Platform,
-  Alert,
+  Animated,
 } from 'react-native';
 import { useLocalSearchParams, router } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -31,51 +31,78 @@ import SkillsBar from '@/components/SkillsBar';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
+const SKILL_COST = 1000;
 
 const HEADER_H = 56;
-const SKILLS_H = 78;
-const TRAY_H = 82;
+const SKILLS_H = 88;
+const TRAY_H   = 82;
 const BOARD_MARGIN = 12;
 const CELL_GAP = 3;
+
+// ── Skill purchase popup state ───────────────────────────
+type SkillType = 'green' | 'red' | 'purple';
+interface SkillDef {
+  key: SkillType;
+  label: string;
+  desc: string;
+  icon: string;
+  color: string;
+}
+const SKILL_DEFS: Record<SkillType, SkillDef> = {
+  green:  { key: 'green',  label: 'مهارة المساعد',  desc: 'تُكمل زوجاً في الشريط تلقائياً',    icon: 'plus-circle', color: '#4caf50' },
+  red:    { key: 'red',    label: 'مهارة التراجع',  desc: 'ترجع آخر قطعة إلى اللوح',           icon: 'rotate-ccw', color: '#e07030' },
+  purple: { key: 'purple', label: 'مهارة الخلط',    desc: 'تخلط مواضع القطع على اللوح',         icon: 'shuffle',     color: '#9c27b0' },
+};
 
 export default function GameScreen() {
   const { level } = useLocalSearchParams<{ level: string }>();
   const currentLevel = parseInt(level || '1', 10);
   const insets = useSafeAreaInsets();
-  const { gameState, updateCoins, unlockLevel, updateSkills } = useGame();
+  const { gameState, updateCoins, unlockLevel } = useGame();
 
-  const [board, setBoard] = useState<GameBoard>([]);
-  const [tray, setTray] = useState<Tile[]>([]);
-  const [skillGreen, setSkillGreen] = useState(gameState.skillGreen);
-  const [skillRed, setSkillRed] = useState(gameState.skillRed);
-  const [skillPurple, setSkillPurple] = useState(gameState.skillPurple);
-  const [won, setWon] = useState(false);
-  const [lost, setLost] = useState(false);
-  const [coinPopup, setCoinPopup] = useState<string | null>(null);
+  const [board, setBoard]           = useState<GameBoard>([]);
+  const [tray, setTray]             = useState<Tile[]>([]);
+  // Each level always starts fresh with 3 charges per skill
+  const [skillGreen, setSkillGreen]   = useState(3);
+  const [skillRed, setSkillRed]       = useState(3);
+  const [skillPurple, setSkillPurple] = useState(3);
+
+  const [won, setWon]                   = useState(false);
+  const [lost, setLost]                 = useState(false);
+  const [coinPopup, setCoinPopup]       = useState<string | null>(null);
   const [winCountdown, setWinCountdown] = useState(0);
   const [showExitDialog, setShowExitDialog] = useState(false);
+
+  // ── Skill purchase popup ──────────────────────────────
+  const [skillPopup, setSkillPopup]   = useState<SkillType | null>(null);
+  const [watchingAd, setWatchingAd]   = useState(false);
+  const [adProgress, setAdProgress]   = useState(0);
+  const [notEnoughCoins, setNotEnoughCoins] = useState(false);
+  const popupScale = useRef(new Animated.Value(0)).current;
 
   const topPad = Platform.OS === 'web' ? 40 : insets.top;
   const botPad = Platform.OS === 'web' ? 20 : insets.bottom;
 
-  // Calculate tile size so the full 7×5 board fits on screen without overflow
-  const BOARD_PADDING = 16; // board internal padding (8 each side)
-  const EXTRA_MARGIN = 20;  // safety buffer
-  const availH = SCREEN_HEIGHT - topPad - botPad - HEADER_H - SKILLS_H - TRAY_H - BOARD_MARGIN * 2 - BOARD_PADDING - EXTRA_MARGIN;
-  const availW = SCREEN_WIDTH - BOARD_MARGIN * 2 - BOARD_PADDING;
+  const availH = SCREEN_HEIGHT - topPad - botPad - HEADER_H - SKILLS_H - TRAY_H - BOARD_MARGIN * 2 - 24;
+  const availW = SCREEN_WIDTH - BOARD_MARGIN * 2 - 16;
   const tileSizeByH = Math.floor((availH - (BOARD_ROWS - 1) * CELL_GAP) / BOARD_ROWS);
   const tileSizeByW = Math.floor((availW - (BOARD_COLS - 1) * CELL_GAP) / BOARD_COLS);
   const tileSize = Math.min(tileSizeByH, tileSizeByW, 58);
 
-  useEffect(() => {
-    setSkillGreen(gameState.skillGreen);
-    setSkillRed(gameState.skillRed);
-    setSkillPurple(gameState.skillPurple);
-  }, []);
+  const useNative = Platform.OS !== 'web';
 
+  useEffect(() => { startLevel(); }, [currentLevel]);
+
+  // Popup appear animation
   useEffect(() => {
-    startLevel();
-  }, [currentLevel]);
+    if (skillPopup) {
+      Animated.spring(popupScale, {
+        toValue: 1, useNativeDriver: useNative, bounciness: 10,
+      }).start();
+    } else {
+      popupScale.setValue(0);
+    }
+  }, [skillPopup]);
 
   // Auto-navigate home after winning
   useEffect(() => {
@@ -83,28 +110,23 @@ export default function GameScreen() {
     setWinCountdown(2);
     const interval = setInterval(() => {
       setWinCountdown(prev => {
-        if (prev <= 1) {
-          clearInterval(interval);
-          router.back();
-          return 0;
-        }
+        if (prev <= 1) { clearInterval(interval); router.back(); return 0; }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(interval);
   }, [won]);
 
-  useEffect(() => {
-    updateSkills(skillGreen, skillRed, skillPurple);
-  }, [skillGreen, skillRed, skillPurple]);
-
   const startLevel = useCallback(() => {
-    const newBoard = generateBoard(currentLevel);
-    setBoard(newBoard);
+    setBoard(generateBoard(currentLevel));
     setTray([]);
     setWon(false);
     setLost(false);
     setShowExitDialog(false);
+    setSkillGreen(3);
+    setSkillRed(3);
+    setSkillPurple(3);
+    setSkillPopup(null);
   }, [currentLevel]);
 
   const showCoinPopup = (text: string) => {
@@ -112,14 +134,10 @@ export default function GameScreen() {
     setTimeout(() => setCoinPopup(null), 1200);
   };
 
-  // Insert into tray: same symbols grouped adjacent
   const insertIntoTray = useCallback((currentTray: Tile[], newTile: Tile): Tile[] => {
     let insertIdx = -1;
     for (let i = currentTray.length - 1; i >= 0; i--) {
-      if (currentTray[i].symbol === newTile.symbol) {
-        insertIdx = i + 1;
-        break;
-      }
+      if (currentTray[i].symbol === newTile.symbol) { insertIdx = i + 1; break; }
     }
     if (insertIdx === -1) return [...currentTray, newTile];
     return [...currentTray.slice(0, insertIdx), newTile, ...currentTray.slice(insertIdx)];
@@ -141,15 +159,13 @@ export default function GameScreen() {
     const topTile = stack[0];
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
 
-    // Remove top tile from that cell's stack
     const newBoard: GameBoard = board.map((r, ri) =>
       r.map((s, ci) => ri === row && ci === col ? s.slice(1) : [...s])
     );
+    const newTray  = insertIntoTray(tray, topTile);
+    const matchCnt = newTray.filter(t => t.symbol === topTile.symbol).length;
 
-    const newTray = insertIntoTray(tray, topTile);
-    const matchCount = newTray.filter(t => t.symbol === topTile.symbol).length;
-
-    if (matchCount >= 3) {
+    if (matchCnt >= 3) {
       const afterMatch = removeMatchFromTray(newTray, topTile.symbol);
       updateCoins(100);
       showCoinPopup('+100 🪙');
@@ -175,113 +191,138 @@ export default function GameScreen() {
     }
   }, [board, tray, won, lost, currentLevel, insertIntoTray]);
 
-  // GREEN: auto-complete a pair in tray using a board tile
-  const handleGreenSkill = useCallback(() => {
-    if (skillGreen <= 0) return;
+  // ── Skill execution helpers ───────────────────────────
+  const execGreen = useCallback(() => {
     const twin = hasTwinsInTray(tray);
-    if (!twin) {
-      Alert.alert('مهارة خضراء', 'تحتاج لاثنين من نفس الشكل في الشريط أولاً');
-      return;
-    }
+    if (!twin) return;
     const { symbol } = twin;
-    let foundRow = -1, foundCol = -1;
+    let fRow = -1, fCol = -1;
     outer: for (let r = 0; r < BOARD_ROWS; r++) {
       for (let c = 0; c < BOARD_COLS; c++) {
-        if (board[r]?.[c]?.[0]?.symbol === symbol) {
-          foundRow = r; foundCol = c;
-          break outer;
-        }
+        if (board[r]?.[c]?.[0]?.symbol === symbol) { fRow = r; fCol = c; break outer; }
       }
     }
-    if (foundRow === -1) {
-      Alert.alert('مهارة خضراء', 'لا يوجد هذا الشكل في اللوح');
-      return;
-    }
+    if (fRow === -1) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const boardTile = board[foundRow][foundCol][0];
+    const boardTile = board[fRow][fCol][0];
     const newBoard: GameBoard = board.map((r, ri) =>
-      r.map((s, ci) => ri === foundRow && ci === foundCol ? s.slice(1) : [...s])
+      r.map((s, ci) => ri === fRow && ci === fCol ? s.slice(1) : [...s])
     );
     const newTray = insertIntoTray(tray, boardTile);
-    const symCount = newTray.filter(t => t.symbol === symbol).length;
-    if (symCount >= 3) {
+    const cnt = newTray.filter(t => t.symbol === symbol).length;
+    if (cnt >= 3) {
       const afterMatch = removeMatchFromTray(newTray, symbol);
-      updateCoins(100);
-      showCoinPopup('+100 🪙');
+      updateCoins(100); showCoinPopup('+100 🪙');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTray(afterMatch);
-      setBoard(newBoard);
+      setTray(afterMatch); setBoard(newBoard);
       if (isBoardEmpty(newBoard) && afterMatch.length === 0) {
         setTimeout(() => { setWon(true); unlockLevel(currentLevel + 1); }, 300);
       }
     } else {
-      setTray(newTray);
-      setBoard(newBoard);
+      setTray(newTray); setBoard(newBoard);
     }
-    setSkillGreen(prev => prev - 1);
+    setSkillGreen(p => p - 1);
   }, [skillGreen, tray, board, currentLevel, insertIntoTray]);
 
-  // RED: put last tray tile back on its original cell (top of stack)
-  const handleRedSkill = useCallback(() => {
-    if (skillRed <= 0 || tray.length === 0) return;
+  const execRed = useCallback(() => {
+    if (tray.length === 0) return;
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     const lastTile = tray[tray.length - 1];
-    const newTray = tray.slice(0, -1);
+    const newTray  = tray.slice(0, -1);
     const newBoard: GameBoard = board.map((r, ri) =>
-      r.map((s, ci) =>
-        ri === lastTile.row && ci === lastTile.col ? [lastTile, ...s] : [...s]
-      )
+      r.map((s, ci) => ri === lastTile.row && ci === lastTile.col ? [lastTile, ...s] : [...s])
     );
-    setTray(newTray);
-    setBoard(newBoard);
-    setSkillRed(prev => prev - 1);
+    setTray(newTray); setBoard(newBoard);
+    setSkillRed(p => p - 1);
   }, [skillRed, tray, board]);
 
-  // PURPLE: shuffle symbols among top tiles only (positions stay)
-  const handlePurpleSkill = useCallback(() => {
-    if (skillPurple <= 0) return;
+  const execPurple = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    // Collect all top tiles
     const topTiles: { row: number; col: number; tile: Tile }[] = [];
-    for (let r = 0; r < BOARD_ROWS; r++) {
-      for (let c = 0; c < BOARD_COLS; c++) {
-        if (board[r]?.[c]?.length > 0) {
-          topTiles.push({ row: r, col: c, tile: board[r][c][0] });
-        }
-      }
-    }
-    // Shuffle their positions
-    const shuffledPositions = shuffle(topTiles.map(t => ({ row: t.row, col: t.col })));
-    const newBoard: GameBoard = board.map(r => r.map(s => [...s]));
-    topTiles.forEach((item, i) => {
-      const newPos = shuffledPositions[i];
-      // Move this tile to newPos
-      newBoard[newPos.row][newPos.col][0] = { ...item.tile, row: newPos.row, col: newPos.col };
-    });
-    // Restore original positions with shuffled tiles
+    for (let r = 0; r < BOARD_ROWS; r++)
+      for (let c = 0; c < BOARD_COLS; c++)
+        if (board[r]?.[c]?.length > 0) topTiles.push({ row: r, col: c, tile: board[r][c][0] });
     const shuffledTiles = shuffle(topTiles.map(t => t.tile));
+    const newBoard: GameBoard = board.map(r => r.map(s => [...s]));
     topTiles.forEach((item, i) => {
       newBoard[item.row][item.col][0] = { ...shuffledTiles[i], row: item.row, col: item.col };
     });
     setBoard(newBoard);
-    setSkillPurple(prev => prev - 1);
+    setSkillPurple(p => p - 1);
   }, [skillPurple, board]);
 
-  const handleExit = () => setShowExitDialog(true);
+  // ── Skill press handler (routes to exec or purchase popup) ────
+  const handleSkillPress = useCallback((type: SkillType) => {
+    const count = type === 'green' ? skillGreen : type === 'red' ? skillRed : skillPurple;
+    if (count > 0) {
+      if (type === 'green')  execGreen();
+      if (type === 'red')    execRed();
+      if (type === 'purple') execPurple();
+    } else {
+      // Open the purchase popup
+      setNotEnoughCoins(false);
+      setWatchingAd(false);
+      setAdProgress(0);
+      setSkillPopup(type);
+      Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    }
+  }, [skillGreen, skillRed, skillPurple, execGreen, execRed, execPurple]);
 
-  // Count remaining tiles for progress display
+  // ── Purchase actions ──────────────────────────────────
+  const handleBuySkill = useCallback(() => {
+    if (!skillPopup) return;
+    if (gameState.coins < SKILL_COST) {
+      setNotEnoughCoins(true);
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      setTimeout(() => setNotEnoughCoins(false), 2000);
+      return;
+    }
+    updateCoins(-SKILL_COST);
+    if (skillPopup === 'green')  setSkillGreen(p => p + 1);
+    if (skillPopup === 'red')    setSkillRed(p => p + 1);
+    if (skillPopup === 'purple') setSkillPurple(p => p + 1);
+    showCoinPopup(`-${SKILL_COST} 🪙`);
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    setSkillPopup(null);
+  }, [skillPopup, gameState.coins, updateCoins]);
+
+  const handleWatchAd = useCallback(() => {
+    if (!skillPopup || watchingAd) return;
+    setWatchingAd(true);
+    setAdProgress(0);
+    // Simulate watching a 5-second rewarded video
+    let elapsed = 0;
+    const interval = setInterval(() => {
+      elapsed++;
+      setAdProgress(elapsed / 5);
+      if (elapsed >= 5) {
+        clearInterval(interval);
+        const type = skillPopup;
+        setWatchingAd(false);
+        setSkillPopup(null);
+        if (type === 'green')  setSkillGreen(p => p + 1);
+        if (type === 'red')    setSkillRed(p => p + 1);
+        if (type === 'purple') setSkillPurple(p => p + 1);
+        showCoinPopup('🎬 +1 مهارة!');
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      }
+    }, 1000);
+  }, [skillPopup, watchingAd]);
+
   const remaining = useMemo(() =>
     board.reduce((sum, row) => sum + row.reduce((s, stack) => s + stack.length, 0), 0),
     [board]
   );
 
+  const skillDef = skillPopup ? SKILL_DEFS[skillPopup] : null;
+
   return (
     <ImageBackground source={BG} style={styles.bg} resizeMode="cover">
       <View style={[styles.overlay, { paddingTop: topPad, paddingBottom: botPad }]}>
 
-        {/* Header */}
+        {/* ── Header ── */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={handleExit} style={styles.exitBtn} testID="exit-btn">
+          <TouchableOpacity onPress={() => setShowExitDialog(true)} style={styles.exitBtn} testID="exit-btn">
             <Feather name="x" size={20} color="#f5a623" />
           </TouchableOpacity>
           <Text style={styles.levelText}>المستوى {currentLevel}</Text>
@@ -297,7 +338,7 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* Fixed Game Board — no scroll, all in one screen */}
+        {/* ── Board ── */}
         <View style={styles.boardWrapper}>
           <View style={styles.board}>
             {Array.from({ length: BOARD_ROWS }).map((_, row) => (
@@ -306,7 +347,6 @@ export default function GameScreen() {
                   const stack = board[row]?.[col] || [];
                   const topTile = stack[0];
                   const depth = stack.length;
-
                   return (
                     <TouchableOpacity
                       key={`${row}-${col}`}
@@ -315,17 +355,12 @@ export default function GameScreen() {
                       disabled={won || lost || depth === 0}
                       style={[
                         styles.cell,
-                        {
-                          width: tileSize,
-                          height: tileSize,
-                          borderRadius: tileSize * 0.14,
-                        },
+                        { width: tileSize, height: tileSize, borderRadius: tileSize * 0.14 },
                         depth === 0 && styles.cellEmpty,
                       ]}
                     >
                       {depth > 0 && (
                         <>
-                          {/* Depth shadows behind the tile */}
                           {depth >= 3 && (
                             <View style={[styles.depthLayer2, {
                               width: tileSize - 8, height: tileSize - 8,
@@ -338,7 +373,6 @@ export default function GameScreen() {
                               borderRadius: tileSize * 0.13,
                             }]} />
                           )}
-                          {/* Top tile */}
                           <TileComponent
                             tile={topTile}
                             size={tileSize}
@@ -355,21 +389,105 @@ export default function GameScreen() {
           </View>
         </View>
 
-        {/* Skills Bar */}
+        {/* ── Skills Bar ── */}
         <SkillsBar
           greenCount={skillGreen}
           redCount={skillRed}
           purpleCount={skillPurple}
-          onGreen={handleGreenSkill}
-          onRed={handleRedSkill}
-          onPurple={handlePurpleSkill}
+          onGreen={() => handleSkillPress('green')}
+          onRed={() => handleSkillPress('red')}
+          onPurple={() => handleSkillPress('purple')}
           redDisabled={tray.length === 0}
         />
 
-        {/* Tray */}
+        {/* ── Tray ── */}
         <TrayBar tray={tray} />
 
-        {/* Win Overlay */}
+        {/* ══════════════ SKILL PURCHASE POPUP ══════════════ */}
+        {skillPopup && skillDef && (
+          <View style={styles.popupOverlay}>
+            <Animated.View
+              style={[
+                styles.popupCard,
+                { borderColor: skillDef.color, transform: [{ scale: popupScale }] },
+              ]}
+            >
+              {/* Glow border top accent */}
+              <View style={[styles.popupAccentBar, { backgroundColor: skillDef.color }]} />
+
+              {/* Skill icon & name */}
+              <View style={[styles.popupIconCircle, { backgroundColor: skillDef.color + '22', borderColor: skillDef.color }]}>
+                <Feather name={skillDef.icon as any} size={32} color={skillDef.color} />
+              </View>
+              <Text style={[styles.popupTitle, { color: skillDef.color }]}>{skillDef.label}</Text>
+              <Text style={styles.popupDesc}>{skillDef.desc}</Text>
+
+              <View style={styles.popupDivider} />
+
+              <Text style={styles.popupQuestion}>رصيدك الحالي: 🪙 {gameState.coins.toLocaleString()}</Text>
+
+              {notEnoughCoins && (
+                <View style={styles.errorBadge}>
+                  <Feather name="alert-circle" size={13} color="#e53935" />
+                  <Text style={styles.errorText}>عملاتك غير كافية!</Text>
+                </View>
+              )}
+
+              {/* Buy button */}
+              <TouchableOpacity
+                style={[
+                  styles.popupBtnBuy,
+                  { borderColor: '#f5a623' },
+                  gameState.coins < SKILL_COST && styles.popupBtnDisabled,
+                ]}
+                onPress={handleBuySkill}
+                activeOpacity={0.8}
+              >
+                <Text style={styles.popupBtnBuyIcon}>🪙</Text>
+                <Text style={styles.popupBtnBuyText}>شراء استخدام واحد · {SKILL_COST.toLocaleString()} عملة</Text>
+              </TouchableOpacity>
+
+              {/* Watch Video button */}
+              <TouchableOpacity
+                style={[styles.popupBtnVideo, watchingAd && styles.popupBtnWatching]}
+                onPress={handleWatchAd}
+                disabled={watchingAd}
+                activeOpacity={0.8}
+              >
+                {watchingAd ? (
+                  <View style={styles.adProgressRow}>
+                    <Feather name="film" size={16} color="#fff" />
+                    <Text style={styles.popupBtnVideoText}>جاري مشاهدة الإعلان…</Text>
+                    <Text style={styles.adProgressPct}>{Math.round(adProgress * 100)}%</Text>
+                  </View>
+                ) : (
+                  <>
+                    <Feather name="play-circle" size={18} color="#fff" />
+                    <Text style={styles.popupBtnVideoText}>شاهد فيديو واحصل على استخدام مجاني</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+
+              {/* Ad progress bar */}
+              {watchingAd && (
+                <View style={styles.adBarBg}>
+                  <Animated.View
+                    style={[styles.adBarFill, { width: `${Math.round(adProgress * 100)}%` as any }]}
+                  />
+                </View>
+              )}
+
+              {/* Cancel */}
+              {!watchingAd && (
+                <TouchableOpacity style={styles.popupBtnCancel} onPress={() => setSkillPopup(null)}>
+                  <Text style={styles.popupBtnCancelText}>إلغاء</Text>
+                </TouchableOpacity>
+              )}
+            </Animated.View>
+          </View>
+        )}
+
+        {/* ── Win Overlay ── */}
         {won && (
           <View style={styles.resultOverlay}>
             <View style={styles.resultCard}>
@@ -377,7 +495,7 @@ export default function GameScreen() {
               <Text style={styles.resultTitle}>رائع! فزت!</Text>
               <Text style={styles.resultSub}>المستوى {currentLevel} مكتمل</Text>
               <View style={styles.countdownWrap}>
-                <Text style={styles.countdownText}>العودة للخريطة خلال {winCountdown}...</Text>
+                <Text style={styles.countdownText}>العودة للخريطة خلال {winCountdown}…</Text>
               </View>
               <TouchableOpacity style={styles.nextBtn} onPress={() => router.back()}>
                 <Text style={styles.nextBtnText}>العودة الآن ←</Text>
@@ -386,7 +504,7 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* Lose Overlay */}
+        {/* ── Lose Overlay ── */}
         {lost && (
           <View style={styles.resultOverlay}>
             <View style={styles.resultCard}>
@@ -403,7 +521,7 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* Exit Dialog */}
+        {/* ── Exit Dialog ── */}
         {showExitDialog && (
           <View style={styles.resultOverlay}>
             <View style={styles.resultCard}>
@@ -429,10 +547,9 @@ export default function GameScreen() {
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(10,5,25,0.72)',
-  },
+  overlay: { flex: 1, backgroundColor: 'rgba(10,5,25,0.72)' },
+
+  // Header
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -442,177 +559,209 @@ const styles = StyleSheet.create({
     height: HEADER_H,
   },
   exitBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
+    width: 34, height: 34, borderRadius: 17,
     backgroundColor: '#2d1b4ecc',
-    borderWidth: 1,
-    borderColor: '#f5a62366',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderWidth: 1, borderColor: '#f5a62366',
+    alignItems: 'center', justifyContent: 'center',
   },
-  levelText: {
-    color: '#f5e6d3',
-    fontSize: 17,
-    fontWeight: '700',
-  },
+  levelText: { color: '#f5e6d3', fontSize: 17, fontWeight: '700' },
   coinsBadge: {
     backgroundColor: '#2d1b4ecc',
-    borderRadius: 20,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderWidth: 1,
-    borderColor: '#f5a62366',
+    borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3,
+    borderWidth: 1, borderColor: '#f5a62366',
   },
-  coinsText: {
-    color: '#f5a623',
-    fontWeight: '700',
-    fontSize: 13,
-  },
+  coinsText: { color: '#f5a623', fontWeight: '700', fontSize: 13 },
+
+  // Coin popup
   coinPopup: {
-    position: 'absolute',
-    top: 90,
-    alignSelf: 'center',
-    backgroundColor: '#f5a623',
-    borderRadius: 20,
-    paddingHorizontal: 20,
-    paddingVertical: 6,
-    zIndex: 999,
+    position: 'absolute', top: 90, alignSelf: 'center',
+    backgroundColor: '#f5a623', borderRadius: 20,
+    paddingHorizontal: 20, paddingVertical: 6, zIndex: 999,
   },
-  coinPopupText: {
-    color: '#1a0e2e',
-    fontWeight: '900',
-    fontSize: 18,
-  },
+  coinPopupText: { color: '#1a0e2e', fontWeight: '900', fontSize: 18 },
+
+  // Board
   boardWrapper: {
-    flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1, alignItems: 'center', justifyContent: 'center',
     marginHorizontal: BOARD_MARGIN,
   },
   board: {
     backgroundColor: 'rgba(20,10,45,0.6)',
-    borderRadius: 18,
-    padding: 8,
-    borderWidth: 1,
-    borderColor: '#4a307055',
+    borderRadius: 18, padding: 8,
+    borderWidth: 1, borderColor: '#4a307055',
   },
-  boardRow: {
-    flexDirection: 'row',
-    marginBottom: CELL_GAP,
-  },
+  boardRow: { flexDirection: 'row', marginBottom: CELL_GAP },
   cell: {
-    marginRight: CELL_GAP,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'visible',
+    marginRight: CELL_GAP, alignItems: 'center', justifyContent: 'center', overflow: 'visible',
   },
   cellEmpty: {
     backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1,
-    borderColor: 'rgba(255,255,255,0.07)',
+    borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)',
   },
   depthLayer2: {
     position: 'absolute',
     backgroundColor: 'rgba(100,60,180,0.25)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,166,35,0.2)',
-    top: 6,
-    left: 6,
+    borderWidth: 1, borderColor: 'rgba(245,166,35,0.2)',
+    top: 6, left: 6,
   },
   depthLayer1: {
     position: 'absolute',
     backgroundColor: 'rgba(100,60,180,0.35)',
-    borderWidth: 1,
-    borderColor: 'rgba(245,166,35,0.3)',
-    top: 3,
-    left: 3,
+    borderWidth: 1, borderColor: 'rgba(245,166,35,0.3)',
+    top: 3, left: 3,
   },
-  stackBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    backgroundColor: '#f5a623',
-    borderRadius: 8,
-    paddingHorizontal: 4,
-    paddingVertical: 1,
-    minWidth: 18,
+
+  // ── Skill purchase popup ──────────────────────────────
+  popupOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(5,2,18,0.82)',
     alignItems: 'center',
-    zIndex: 10,
+    justifyContent: 'center',
+    zIndex: 200,
   },
-  stackBadgeText: {
-    color: '#1a0e2e',
-    fontSize: 9,
-    fontWeight: '900',
+  popupCard: {
+    width: SCREEN_WIDTH * 0.88,
+    backgroundColor: '#13092a',
+    borderRadius: 24,
+    borderWidth: 2,
+    alignItems: 'center',
+    paddingBottom: 20,
+    overflow: 'hidden',
+    shadowColor: '#f5a623',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.4,
+    shadowRadius: 20,
+    elevation: 20,
   },
+  popupAccentBar: {
+    width: '100%', height: 4, marginBottom: 24,
+  },
+  popupIconCircle: {
+    width: 72, height: 72, borderRadius: 36,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 2, marginBottom: 12,
+  },
+  popupTitle: {
+    fontSize: 20, fontWeight: '900', marginBottom: 4,
+  },
+  popupDesc: {
+    color: '#9b8ec4', fontSize: 13, textAlign: 'center',
+    paddingHorizontal: 20, marginBottom: 16,
+  },
+  popupDivider: {
+    width: '85%', height: 1,
+    backgroundColor: '#f5a62222',
+    marginBottom: 12,
+  },
+  popupQuestion: {
+    color: '#f5e6d3', fontSize: 14, fontWeight: '600',
+    marginBottom: 6,
+  },
+  errorBadge: {
+    flexDirection: 'row', alignItems: 'center', gap: 6,
+    backgroundColor: '#e5393520',
+    borderRadius: 10, paddingHorizontal: 12, paddingVertical: 5,
+    borderWidth: 1, borderColor: '#e5393544',
+    marginBottom: 8,
+  },
+  errorText: { color: '#e53935', fontSize: 12, fontWeight: '700' },
+
+  // Buy button
+  popupBtnBuy: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '85%',
+    backgroundColor: '#2a1800',
+    borderWidth: 2,
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  popupBtnBuyIcon: { fontSize: 18 },
+  popupBtnBuyText: {
+    color: '#f5a623', fontWeight: '800', fontSize: 14,
+  },
+  popupBtnDisabled: {
+    opacity: 0.4,
+  },
+
+  // Watch video button
+  popupBtnVideo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '85%',
+    backgroundColor: '#1a3a2a',
+    borderWidth: 2,
+    borderColor: '#4caf50',
+    borderRadius: 14,
+    paddingVertical: 14,
+    marginBottom: 10,
+  },
+  popupBtnWatching: {
+    backgroundColor: '#0e2a1a',
+    borderColor: '#4caf5055',
+  },
+  popupBtnVideoText: {
+    color: '#fff', fontWeight: '700', fontSize: 13,
+  },
+  adProgressRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'center',
+  },
+  adProgressPct: {
+    color: '#4caf50', fontWeight: '900', fontSize: 14,
+  },
+  adBarBg: {
+    width: '85%', height: 6, backgroundColor: '#1a1230',
+    borderRadius: 3, marginBottom: 10, overflow: 'hidden',
+  },
+  adBarFill: {
+    height: '100%', backgroundColor: '#4caf50', borderRadius: 3,
+  },
+
+  // Cancel button
+  popupBtnCancel: {
+    paddingVertical: 8, paddingHorizontal: 24,
+  },
+  popupBtnCancelText: {
+    color: '#665599', fontSize: 14, fontWeight: '600',
+  },
+
+  // ── Result overlays ───────────────────────────────────
   resultOverlay: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(10,5,25,0.88)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: 'center', justifyContent: 'center',
     zIndex: 100,
   },
   resultCard: {
     backgroundColor: '#2d1b4e',
-    borderRadius: 24,
-    padding: 28,
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: '#f5a623',
+    borderRadius: 24, padding: 28, alignItems: 'center',
+    borderWidth: 2, borderColor: '#f5a623',
     width: SCREEN_WIDTH * 0.82,
   },
   resultEmoji: { fontSize: 52, marginBottom: 10 },
-  resultTitle: {
-    color: '#f5e6d3',
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 6,
-  },
-  resultSub: {
-    color: '#9b8ec4',
-    fontSize: 15,
-    marginBottom: 20,
-  },
+  resultTitle: { color: '#f5e6d3', fontSize: 24, fontWeight: '800', marginBottom: 6 },
+  resultSub:   { color: '#9b8ec4', fontSize: 15, marginBottom: 20 },
   countdownWrap: {
     backgroundColor: 'rgba(245,166,35,0.15)',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 5,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#f5a62355',
+    borderRadius: 10, paddingHorizontal: 14, paddingVertical: 5,
+    marginBottom: 16, borderWidth: 1, borderColor: '#f5a62355',
   },
-  countdownText: {
-    color: '#f5a623',
-    fontSize: 13,
-    fontWeight: '600',
-  },
+  countdownText: { color: '#f5a623', fontSize: 13, fontWeight: '600' },
   nextBtn: {
-    backgroundColor: '#f5a623',
-    borderRadius: 13,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    width: '100%',
-    alignItems: 'center',
-    marginBottom: 10,
+    backgroundColor: '#f5a623', borderRadius: 13,
+    paddingHorizontal: 24, paddingVertical: 12,
+    width: '100%', alignItems: 'center', marginBottom: 10,
   },
-  nextBtnText: {
-    color: '#1a0e2e',
-    fontWeight: '800',
-    fontSize: 15,
-  },
+  nextBtnText: { color: '#1a0e2e', fontWeight: '800', fontSize: 15 },
   mapBtn: {
-    borderWidth: 1.5,
-    borderColor: '#f5a62355',
-    borderRadius: 13,
-    paddingHorizontal: 24,
-    paddingVertical: 10,
-    width: '100%',
-    alignItems: 'center',
+    borderWidth: 1.5, borderColor: '#f5a62355',
+    borderRadius: 13, paddingHorizontal: 24, paddingVertical: 10,
+    width: '100%', alignItems: 'center',
   },
-  mapBtnText: {
-    color: '#f5a623',
-    fontWeight: '700',
-    fontSize: 14,
-  },
+  mapBtnText: { color: '#f5a623', fontWeight: '700', fontSize: 14 },
 });

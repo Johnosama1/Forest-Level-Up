@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Animated } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 
 interface SkillsBarProps {
@@ -9,9 +9,7 @@ interface SkillsBarProps {
   onGreen: () => void;
   onRed: () => void;
   onPurple: () => void;
-  greenDisabled?: boolean;
   redDisabled?: boolean;
-  purpleDisabled?: boolean;
 }
 
 export default function SkillsBar({
@@ -21,38 +19,36 @@ export default function SkillsBar({
   onGreen,
   onRed,
   onPurple,
-  greenDisabled,
   redDisabled,
-  purpleDisabled,
 }: SkillsBarProps) {
   return (
     <View style={styles.container}>
       <SkillButton
         color="#4caf50"
-        glowColor="#4caf5066"
         count={greenCount}
         onPress={onGreen}
-        disabled={greenDisabled || greenCount <= 0}
         icon="plus-circle"
+        label="مساعد"
         testID="skill-green"
+        disabled={false}
       />
       <SkillButton
-        color="#e53935"
-        glowColor="#e5393566"
+        color="#e07030"
         count={redCount}
         onPress={onRed}
-        disabled={redDisabled || redCount <= 0}
         icon="rotate-ccw"
+        label="تراجع"
         testID="skill-red"
+        disabled={redDisabled && redCount > 0}
       />
       <SkillButton
         color="#9c27b0"
-        glowColor="#9c27b066"
         count={purpleCount}
         onPress={onPurple}
-        disabled={purpleDisabled || purpleCount <= 0}
         icon="shuffle"
+        label="خلط"
         testID="skill-purple"
+        disabled={false}
       />
     </View>
   );
@@ -60,31 +56,64 @@ export default function SkillsBar({
 
 interface SkillButtonProps {
   color: string;
-  glowColor: string;
   count: number;
   onPress: () => void;
-  disabled?: boolean;
   icon: string;
+  label: string;
   testID?: string;
+  disabled?: boolean;
 }
 
-function SkillButton({ color, glowColor, count, onPress, disabled, icon, testID }: SkillButtonProps) {
+function SkillButton({ color, count, onPress, icon, label, testID, disabled }: SkillButtonProps) {
+  const isEmpty = count <= 0;
+
   return (
     <TouchableOpacity
       onPress={onPress}
-      disabled={disabled}
+      disabled={!!disabled}
       activeOpacity={0.75}
+      testID={testID}
       style={[
         styles.skillBtn,
-        { backgroundColor: disabled ? '#333' : color + '33', borderColor: disabled ? '#555' : color },
+        {
+          borderColor: isEmpty ? '#555' : color,
+          backgroundColor: isEmpty ? '#1a0e2e' : color + '22',
+        },
+        disabled && styles.btnDisabled,
       ]}
-      testID={testID}
     >
-      <View style={[styles.iconWrapper, { backgroundColor: disabled ? '#444' : glowColor }]}>
-        <Feather name={icon as any} size={22} color={disabled ? '#777' : color} />
+      {/* Glow ring when has charges */}
+      {!isEmpty && (
+        <View
+          style={[styles.glowRing, { borderColor: color + '55', shadowColor: color }]}
+        />
+      )}
+
+      {/* Icon */}
+      <View style={[
+        styles.iconWrapper,
+        { backgroundColor: isEmpty ? '#252030' : color + '33' },
+      ]}>
+        <Feather
+          name={icon as any}
+          size={22}
+          color={isEmpty ? '#555' : color}
+        />
       </View>
-      <View style={[styles.badge, { backgroundColor: disabled ? '#555' : color }]}>
-        <Text style={styles.badgeText}>{count}</Text>
+
+      {/* Label */}
+      <Text style={[styles.label, { color: isEmpty ? '#555' : color }]}>{label}</Text>
+
+      {/* Count badge */}
+      <View style={[
+        styles.badge,
+        isEmpty ? styles.badgeEmpty : { backgroundColor: color },
+      ]}>
+        {isEmpty ? (
+          <Feather name="shopping-cart" size={10} color="#aaa" />
+        ) : (
+          <Text style={styles.badgeText}>{count}</Text>
+        )}
       </View>
     </TouchableOpacity>
   );
@@ -95,39 +124,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 28,
-    paddingVertical: 8,
+    gap: 22,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
   },
   skillBtn: {
-    width: 68,
-    height: 68,
-    borderRadius: 34,
+    width: 72,
+    height: 72,
+    borderRadius: 36,
     borderWidth: 2,
     alignItems: 'center',
     justifyContent: 'center',
+    position: 'relative',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 5,
+  },
+  btnDisabled: {
+    opacity: 0.4,
+  },
+  glowRing: {
+    position: 'absolute',
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    borderWidth: 1.5,
+    top: -6,
+    left: -6,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 8,
+    elevation: 0,
   },
   iconWrapper: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 42,
+    height: 42,
+    borderRadius: 21,
     alignItems: 'center',
     justifyContent: 'center',
   },
+  label: {
+    fontSize: 9,
+    fontWeight: '700',
+    marginTop: 2,
+    letterSpacing: 0.5,
+  },
   badge: {
     position: 'absolute',
-    bottom: -4,
-    right: -4,
+    top: -2,
+    right: -2,
     width: 22,
     height: 22,
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#1a0e2e',
+    borderWidth: 2,
+    borderColor: '#0d0820',
+  },
+  badgeEmpty: {
+    backgroundColor: '#2a2040',
+    borderColor: '#555',
   },
   badgeText: {
     color: '#fff',
     fontSize: 11,
-    fontWeight: '700',
+    fontWeight: '900',
   },
 });

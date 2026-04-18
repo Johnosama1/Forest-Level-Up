@@ -265,13 +265,9 @@ export default function LevelMapScreen() {
           <Text style={styles.coinsLabel}>العملات الذهبية</Text>
           <Text style={styles.coinsValue}>🪙 {gameState.coins.toLocaleString()}</Text>
         </View>
-        <TouchableOpacity
-          style={styles.shopBtn}
-          onPress={() => router.push('/shop')}
-          testID="shop-btn"
-        >
-          <Feather name="shopping-bag" size={20} color="#f5a623" />
-        </TouchableOpacity>
+        <View style={styles.headerRight}>
+          <Text style={styles.headerHint}>اضغط على المستوى للعب</Text>
+        </View>
       </View>
 
       {/* ── Scrollable Tower Map ── */}
@@ -374,11 +370,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '900',
   },
-  shopBtn: {
-    width: 42, height: 42, borderRadius: 21,
-    backgroundColor: '#1e0e3eee',
-    borderWidth: 1, borderColor: '#f5a62344',
-    alignItems: 'center', justifyContent: 'center',
+  headerRight: {
+    alignItems: 'flex-end',
+    justifyContent: 'center',
+  },
+  headerHint: {
+    color: '#9b8ec4',
+    fontSize: 11,
+    fontStyle: 'italic',
   },
 
   // Tower spine
