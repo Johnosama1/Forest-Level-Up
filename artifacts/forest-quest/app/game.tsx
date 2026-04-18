@@ -409,6 +409,13 @@ export default function GameScreen() {
                         depth === 0 && styles.cellEmpty,
                       ]}
                     >
+                      {depth === 0 && (
+                        <ImageBackground
+                          source={require('../assets/images/forest_bg.jpg')}
+                          style={[styles.cellEmptyImg, { borderRadius: tileSize * 0.14 }]}
+                          imageStyle={{ borderRadius: tileSize * 0.14 }}
+                        />
+                      )}
                       {depth > 0 && (
                         <>
                           {depth >= 3 && (
@@ -727,7 +734,13 @@ const styles = StyleSheet.create({
   cellEmpty: {
     backgroundColor: 'transparent',
     borderWidth: 0,
-    opacity: 0,
+    overflow: 'hidden',
+  },
+  cellEmptyImg: {
+    flex: 1,
+    width: '100%',
+    height: '100%',
+    opacity: 0.45,
   },
   depthLayer2: {
     position: 'absolute',
