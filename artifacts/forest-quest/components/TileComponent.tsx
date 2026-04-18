@@ -145,7 +145,6 @@ export default function TileComponent({
 
         {/* Gloss highlight (idle state overlay) */}
         <Animated.View
-          pointerEvents="none"
           style={[
             styles.gloss,
             {
@@ -155,6 +154,7 @@ export default function TileComponent({
               top: size * 0.07,
               left: size * 0.08,
               opacity: glowOpacity,
+              pointerEvents: 'none',
             },
           ]}
         />
@@ -162,7 +162,6 @@ export default function TileComponent({
         {/* Highlighted / drag-in-progress ring */}
         {highlighted && (
           <View
-            pointerEvents="none"
             style={[
               StyleSheet.absoluteFillObject,
               {
@@ -170,6 +169,7 @@ export default function TileComponent({
                 borderWidth: 2,
                 borderColor: color,
                 backgroundColor: color + '22',
+                pointerEvents: 'none',
               },
             ]}
           />

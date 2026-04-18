@@ -71,15 +71,37 @@ function generateTutorialBoard(): GameBoard {
   return board;
 }
 
+// ── Per-level configuration for smooth difficulty curve ──────────────────
+function getLevelConfig(level: number): { activeCols: number; activeRows: number; depth: number } {
+  // Level 1 = tutorial (handled separately)
+  if (level <= 3) {
+    // Very easy: small 3×2 grid, 1 layer deep
+    return { activeCols: 3, activeRows: 2 + level, depth: 1 };
+  } else if (level <= 6) {
+    // Easy: 4×3 to 4×5 grid, 1-2 layers
+    return { activeCols: 4, activeRows: 3 + level - 3, depth: level <= 4 ? 1 : 2 };
+  } else if (level <= 15) {
+    // Medium: full 5-col, growing rows, depth 2-3
+    return { activeCols: 5, activeRows: Math.min(4 + Math.floor((level - 7) / 2), 7), depth: level <= 10 ? 2 : 3 };
+  } else if (level <= 50) {
+    // Hard: full board, depth 3-6
+    return { activeCols: 5, activeRows: 7, depth: 3 + Math.floor((level - 15) / 10) };
+  } else {
+    // Very hard: full board, depth grows capped at 10
+    return { activeCols: 5, activeRows: 7, depth: Math.min(7 + Math.floor((level - 50) / 50), 10) };
+  }
+}
+
 export function generateBoard(level: number): GameBoard {
   if (level === 1) return generateTutorialBoard();
 
-  const totalCells = BOARD_COLS * BOARD_ROWS; // 35
-  // Depth grows with level: level 1 → ~1 deep, level 2 → ~2 deep, etc. Cap at 10
-  const depthPerCell = Math.min(level, 10);
-  const rawTarget = depthPerCell * totalCells;
+  const { activeCols, activeRows, depth } = getLevelConfig(level);
+
+  // Determine how many active cells we'll use
+  const activeCells = activeCols * activeRows;
+  const rawTarget = depth * activeCells;
   // Ensure multiple of 3
-  const targetTiles = Math.floor(rawTarget / 3) * 3;
+  const targetTiles = Math.max(Math.floor(rawTarget / 3) * 3, 9);
 
   const { symbols, numSymbols } = getSymbolsForLevel(level);
   const usedSymbols = symbols.slice(0, numSymbols);
@@ -91,17 +113,23 @@ export function generateBoard(level: number): GameBoard {
     Array.from({ length: BOARD_COLS }, () => [] as Tile[])
   );
 
-  // Fill stacks layer by layer (so top layer is shuffled last = most random)
+  // Center the active area in the board
+  const rowOffset = Math.floor((BOARD_ROWS - activeRows) / 2);
+  const colOffset = Math.floor((BOARD_COLS - activeCols) / 2);
+
+  // Fill stacks layer by layer
   let idx = 0;
-  for (let d = 0; d < depthPerCell; d++) {
-    for (let r = 0; r < BOARD_ROWS; r++) {
-      for (let c = 0; c < BOARD_COLS; c++) {
+  for (let d = 0; d < depth; d++) {
+    for (let r = 0; r < activeRows; r++) {
+      for (let c = 0; c < activeCols; c++) {
         if (idx < shuffled.length) {
-          board[r][c].push({
+          const br = r + rowOffset;
+          const bc = c + colOffset;
+          board[br][bc].push({
             id: generateId(),
             symbol: shuffled[idx++],
-            row: r,
-            col: c,
+            row: br,
+            col: bc,
           });
         }
       }

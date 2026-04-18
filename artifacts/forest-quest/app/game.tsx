@@ -39,14 +39,6 @@ import InventoryPanel, { InventoryBagBtn, InventoryEntry } from '@/components/In
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
 
-// Filler images for empty cells — cycling per position (not interactive)
-const FILLER_IMAGES = [
-  require('../assets/tiles/pear.png'),
-  require('../assets/tiles/grape.png'),
-  require('../assets/tiles/orange.png'),
-];
-const FILLER_COLORS = ['#8bc34a', '#9c27b0', '#ff7043'];
-
 const SKILL_COST = 200;
 const CONTINUE_COST = 1000;
 
@@ -234,13 +226,14 @@ export default function GameScreen() {
   }, [coinPopup]);
 
   // Drop zone pulse animation while dragging
+  // Must use useNativeDriver: false because backgroundColor/borderTopColor are not native-driver compatible
   useEffect(() => {
     if (dragTile) {
       dropPulse.setValue(0);
       Animated.loop(
         Animated.sequence([
-          Animated.timing(dropPulse, { toValue: 1, duration: 650, useNativeDriver: useNative }),
-          Animated.timing(dropPulse, { toValue: 0, duration: 650, useNativeDriver: useNative }),
+          Animated.timing(dropPulse, { toValue: 1, duration: 650, useNativeDriver: false }),
+          Animated.timing(dropPulse, { toValue: 0, duration: 650, useNativeDriver: false }),
         ])
       ).start();
     } else {
@@ -306,6 +299,16 @@ export default function GameScreen() {
       if (entry.count <= 1) return prev.filter(e => e.symbol !== symbol);
       return prev.map(e => e.symbol === symbol ? { ...e, count: e.count - 1 } : e);
     });
+  }, []);
+
+  // Must be defined before useInventoryItem and handleCellPress which reference it
+  const insertIntoTray = useCallback((currentTray: Tile[], newTile: Tile): Tile[] => {
+    let insertIdx = -1;
+    for (let i = currentTray.length - 1; i >= 0; i--) {
+      if (currentTray[i].symbol === newTile.symbol) { insertIdx = i + 1; break; }
+    }
+    if (insertIdx === -1) return [...currentTray, newTile];
+    return [...currentTray.slice(0, insertIdx), newTile, ...currentTray.slice(insertIdx)];
   }, []);
 
   // Send an inventory item into the tray
@@ -401,15 +404,6 @@ export default function GameScreen() {
     setCoinPopup(text);
     setTimeout(() => setCoinPopup(null), 1200);
   };
-
-  const insertIntoTray = useCallback((currentTray: Tile[], newTile: Tile): Tile[] => {
-    let insertIdx = -1;
-    for (let i = currentTray.length - 1; i >= 0; i--) {
-      if (currentTray[i].symbol === newTile.symbol) { insertIdx = i + 1; break; }
-    }
-    if (insertIdx === -1) return [...currentTray, newTile];
-    return [...currentTray.slice(0, insertIdx), newTile, ...currentTray.slice(insertIdx)];
-  }, []);
 
   const removeMatchFromTray = (currentTray: Tile[], sym: string): Tile[] => {
     let removed = 0;
@@ -679,9 +673,9 @@ export default function GameScreen() {
               {
                 opacity: coinOpacity,
                 transform: [{ translateY: coinFloat }],
+                pointerEvents: 'none',
               },
             ]}
-            pointerEvents="none"
           >
             <Text style={styles.coinPopupText}>{coinPopup}</Text>
           </Animated.View>
@@ -1062,9 +1056,9 @@ export default function GameScreen() {
                   ],
                   width: tileSize + 8,
                   height: tileSize + 8,
+                  pointerEvents: 'none',
                 },
               ]}
-              pointerEvents="none"
             >
               <TileComponent
                 tile={dragTile.tile}
