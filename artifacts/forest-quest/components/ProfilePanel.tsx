@@ -53,9 +53,6 @@ export default function ProfilePanel({ visible, onClose }: Props) {
     onClose();
   }
 
-  // Avatar initials from username
-  const initials = profile.username.slice(0, 2);
-
   return (
     <Modal transparent animationType="fade" visible={visible} onRequestClose={onClose}>
       <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
@@ -74,7 +71,7 @@ export default function ProfilePanel({ visible, onClose }: Props) {
             {/* Avatar + Identity */}
             <View style={styles.avatarSection}>
               <View style={styles.avatarCircle}>
-                <Text style={styles.avatarText}>{initials}</Text>
+                <Feather name="user" size={30} color="#e8d5a3" />
               </View>
 
               {/* Username */}
@@ -162,11 +159,10 @@ interface AvatarBtnProps {
 }
 export function ProfileAvatarBtn({ onPress }: AvatarBtnProps) {
   const { profile } = useGame();
-  const initials = profile.username.slice(0, 2);
   return (
     <TouchableOpacity style={styles.avatarBtn} onPress={onPress} activeOpacity={0.8}>
       <View style={styles.avatarBtnCircle}>
-        <Text style={styles.avatarBtnText}>{initials}</Text>
+        <Feather name="user" size={18} color="#e8d5a3" />
       </View>
       <View style={[styles.soundDotSmall, { backgroundColor: profile.soundEnabled ? '#8bc34a' : '#e53935' }]} />
     </TouchableOpacity>
