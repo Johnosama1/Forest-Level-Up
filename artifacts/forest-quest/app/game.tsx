@@ -707,8 +707,8 @@ const styles = StyleSheet.create({
     marginRight: CELL_GAP, alignItems: 'center', justifyContent: 'center', overflow: 'visible',
   },
   cellEmpty: {
-    backgroundColor: 'rgba(255,255,255,0.03)',
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.07)',
+    backgroundColor: 'transparent',
+    borderWidth: 0,
   },
   depthLayer2: {
     position: 'absolute',
