@@ -32,6 +32,7 @@ import TileComponent from '@/components/TileComponent';
 import TrayBar from '@/components/TrayBar';
 import SkillsBar from '@/components/SkillsBar';
 import TutorialOverlay from '@/components/TutorialOverlay';
+import RatingModal    from '@/components/RatingModal';
 import AnimatedTrees from '@/components/AnimatedTrees';
 import { useForestAmbient } from '@/hooks/useForestAmbient';
 
@@ -84,6 +85,7 @@ export default function GameScreen() {
   // Show tutorial on level 1 only
   const [showTutorial,  setShowTutorial]  = useState(currentLevel === 1);
   const [targetSlotTile, setTargetSlotTile] = useState<Tile | null>(null);
+  const [showRatingModal, setShowRatingModal] = useState(false);
   const targetSlotPulse = useRef(new Animated.Value(1)).current;
 
   // ── Drag & Drop ────────────────────────────────────────
@@ -268,10 +270,11 @@ export default function GameScreen() {
   // Auto-navigate after winning
   useEffect(() => {
     if (!won) return;
-    // Level 5: skip win screen, go directly to Level 6
+    // Level 5: show rating modal first, then user taps "Next" manually
     if (currentLevel === 5) {
-      router.replace({ pathname: '/game', params: { level: '6' } });
-      return;
+      // Small delay so the win overlay animates in before modal pops
+      const t = setTimeout(() => setShowRatingModal(true), 800);
+      return () => clearTimeout(t);
     }
     setWinCountdown(2);
     const interval = setInterval(() => {
@@ -874,8 +877,8 @@ export default function GameScreen() {
           </View>
         )}
 
-        {/* ── Win Overlay (hidden for Level 5 — instant redirect) ── */}
-        {won && currentLevel !== 5 && (
+        {/* ── Win Overlay ── */}
+        {won && (
           <View style={styles.resultOverlay}>
             {/* Floating stars */}
             {starAnims.map((s, i) => (
@@ -908,12 +911,25 @@ export default function GameScreen() {
                   <Text key={n} style={styles.winStar}>⭐</Text>
                 ))}
               </View>
-              <View style={styles.countdownWrap}>
-                <Text style={styles.countdownText}>العودة للخريطة خلال {winCountdown}…</Text>
-              </View>
-              <TouchableOpacity style={styles.nextBtn} onPress={() => router.back()}>
-                <Text style={styles.nextBtnText}>العودة الآن ←</Text>
-              </TouchableOpacity>
+
+              {currentLevel === 5 ? (
+                /* Level 5: manual "next level" button — no countdown */
+                <TouchableOpacity
+                  style={styles.nextBtn}
+                  onPress={() => router.replace({ pathname: '/game', params: { level: '6' } })}
+                >
+                  <Text style={styles.nextBtnText}>المستوى التالي ←</Text>
+                </TouchableOpacity>
+              ) : (
+                <>
+                  <View style={styles.countdownWrap}>
+                    <Text style={styles.countdownText}>العودة للخريطة خلال {winCountdown}…</Text>
+                  </View>
+                  <TouchableOpacity style={styles.nextBtn} onPress={() => router.back()}>
+                    <Text style={styles.nextBtnText}>العودة الآن ←</Text>
+                  </TouchableOpacity>
+                </>
+              )}
             </Animated.View>
           </View>
         )}
@@ -985,6 +1001,12 @@ export default function GameScreen() {
         {showTutorial && (
           <TutorialOverlay onDone={() => setShowTutorial(false)} />
         )}
+
+        {/* ── Rating Modal (Level 5 win) ── */}
+        <RatingModal
+          visible={showRatingModal}
+          onClose={() => setShowRatingModal(false)}
+        />
 
         {/* ── Exit Dialog ── */}
         {showExitDialog && (
