@@ -59,7 +59,7 @@ interface SkillDef {
 const SKILL_DEFS: Record<SkillType, SkillDef> = {
   green:  { key: 'green',  label: 'مهارة المساعد',  desc: 'تُكمل زوجاً في الشريط تلقائياً',    icon: 'plus-circle', color: '#4caf50' },
   red:    { key: 'red',    label: 'مهارة التراجع',  desc: 'ترجع آخر قطعة إلى اللوح',           icon: 'rotate-ccw', color: '#e07030' },
-  purple: { key: 'purple', label: 'مهارة الخلط',    desc: 'تُطفو القطع المطابقة للشريط لأعلى المجموعات',  icon: 'shuffle',     color: '#9c27b0' },
+  purple: { key: 'purple', label: 'مهارة الإنقاذ',  desc: 'تجلب قطعة مطابقة لرمز مكرر في الشريط وتضعها في الفتحة الخاصة',  icon: 'crosshair',  color: '#9c27b0' },
 };
 
 export default function GameScreen() {
@@ -83,6 +83,8 @@ export default function GameScreen() {
   const [showExitDialog, setShowExitDialog] = useState(false);
   // Show tutorial on level 1 only
   const [showTutorial,  setShowTutorial]  = useState(currentLevel === 1);
+  const [targetSlotTile, setTargetSlotTile] = useState<Tile | null>(null);
+  const targetSlotPulse = useRef(new Animated.Value(1)).current;
 
   // ── Drag & Drop ────────────────────────────────────────
   const [dragTile, setDragTile] = useState<{ tile: Tile; row: number; col: number } | null>(null);
@@ -301,7 +303,10 @@ export default function GameScreen() {
     setSkillRed(3);
     setSkillPurple(3);
     setSkillPopup(null);
-  }, [currentLevel]);
+    setTargetSlotTile(null);
+    targetSlotPulse.stopAnimation();
+    targetSlotPulse.setValue(1);
+  }, [currentLevel, targetSlotPulse]);
 
   // Return the last 3 tiles from tray back to their original board positions
   const continueLevel = useCallback(() => {
@@ -474,51 +479,91 @@ export default function GameScreen() {
   const execPurple = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
 
-    // ── Count duplicate symbols in the tray ──────────────
+    // ── Find the first duplicate symbol in the tray ───────
     const trayCounts: Record<string, number> = {};
     for (const t of tray) {
       trayCounts[t.symbol] = (trayCounts[t.symbol] || 0) + 1;
     }
-    const targetSymbols = new Set(
-      Object.entries(trayCounts)
-        .filter(([, cnt]) => cnt >= 2)
-        .map(([sym]) => sym as TileSymbol)
-    );
+    const dupEntry = Object.entries(trayCounts).find(([, cnt]) => cnt >= 2);
+    if (!dupEntry) return; // no duplicate — do nothing
 
-    const newBoard: GameBoard = board.map(r => r.map(s => [...s]));
+    const targetSymbol = dupEntry[0] as TileSymbol;
 
-    if (targetSymbols.size === 0) {
-      // No duplicates in tray → regular shuffle as fallback
-      const topTiles: { row: number; col: number; tile: Tile }[] = [];
-      for (let r = 0; r < BOARD_ROWS; r++)
-        for (let c = 0; c < BOARD_COLS; c++)
-          if (board[r]?.[c]?.length > 0)
-            topTiles.push({ row: r, col: c, tile: board[r][c][0] });
-      const shuffledTiles = shuffle(topTiles.map(t => t.tile));
-      topTiles.forEach((item, i) => {
-        newBoard[item.row][item.col][0] = { ...shuffledTiles[i], row: item.row, col: item.col };
-      });
-    } else {
-      // ── Surface matching tiles to top of their stacks ──
-      for (let r = 0; r < BOARD_ROWS; r++) {
-        for (let c = 0; c < BOARD_COLS; c++) {
-          const stack = newBoard[r][c];
-          if (stack.length <= 1) continue;
-          // Already on top — nothing to do
-          if (targetSymbols.has(stack[0]?.symbol)) continue;
-          // Find first target symbol buried in this stack
-          const idx = stack.findIndex((t, i) => i > 0 && targetSymbols.has(t.symbol));
-          if (idx === -1) continue;
-          // Bring that tile to index 0 (top)
-          const [pulled] = stack.splice(idx, 1);
-          stack.unshift({ ...pulled, row: r, col: c });
+    // ── Find ONE matching tile on the board (any depth) ───
+    let foundRow = -1, foundCol = -1, foundDepth = -1;
+    outer: for (let r = 0; r < BOARD_ROWS; r++) {
+      for (let c = 0; c < BOARD_COLS; c++) {
+        const stack = board[r][c];
+        for (let d = 0; d < stack.length; d++) {
+          if (stack[d].symbol === targetSymbol) {
+            foundRow = r; foundCol = c; foundDepth = d;
+            break outer;
+          }
         }
       }
     }
+    if (foundRow === -1) return; // symbol not on board
 
+    // ── Remove that one tile from the board ───────────────
+    const newBoard: GameBoard = board.map((r, ri) =>
+      r.map((s, ci) => {
+        if (ri === foundRow && ci === foundCol) {
+          return [...s.slice(0, foundDepth), ...s.slice(foundDepth + 1)];
+        }
+        return [...s];
+      })
+    );
+
+    // ── Place it in the target slot ───────────────────────
     setBoard(newBoard);
+    setTargetSlotTile(board[foundRow][foundCol][foundDepth]);
     setSkillPurple(p => p - 1);
-  }, [skillPurple, board, tray]);
+
+    // Start pulse animation on the slot
+    targetSlotPulse.setValue(1);
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(targetSlotPulse, { toValue: 1.12, duration: 500, useNativeDriver: useNative }),
+        Animated.timing(targetSlotPulse, { toValue: 1,    duration: 500, useNativeDriver: useNative }),
+      ])
+    ).start();
+  }, [skillPurple, board, tray, targetSlotPulse]);
+
+  // Tap the target slot → send tile to tray
+  const handleTargetSlotTap = useCallback(() => {
+    if (!targetSlotTile) return;
+    if (tray.length >= 7) return;
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    targetSlotPulse.stopAnimation();
+    targetSlotPulse.setValue(1);
+
+    const newTray    = insertIntoTray(tray, targetSlotTile);
+    const newHistory = [...trayHistory, targetSlotTile.id];
+    const sym        = targetSlotTile.symbol;
+    const matchCnt   = newTray.filter(t => t.symbol === sym).length;
+
+    setTargetSlotTile(null);
+
+    if (matchCnt >= 3) {
+      const matchedIds = new Set<string>();
+      let cnt = 0;
+      for (const t of newTray) { if (t.symbol === sym && cnt < 3) { matchedIds.add(t.id); cnt++; } }
+      const cleanTray    = newTray.filter(t => !matchedIds.has(t.id));
+      const cleanHistory = newHistory.filter(id => !matchedIds.has(id));
+      updateCoins(10); showCoinPopup('+10 🪙');
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+      setTray(cleanTray); setTrayHistory(cleanHistory);
+      if (isBoardEmpty(board) && cleanTray.length === 0) {
+        setWon(true); unlockLevel(currentLevel + 1);
+      }
+    } else {
+      setTray(newTray); setTrayHistory(newHistory);
+      if (newTray.length >= 7) {
+        setLost(true);
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+      }
+    }
+  }, [targetSlotTile, tray, trayHistory, board, currentLevel, insertIntoTray, targetSlotPulse, updateCoins, unlockLevel]);
 
   // ── Skill press handler (routes to exec or purchase popup) ────
   const handleSkillPress = useCallback((type: SkillType) => {
@@ -708,6 +753,27 @@ export default function GameScreen() {
           onPurple={() => handleSkillPress('purple')}
           redDisabled={tray.length === 0}
         />
+
+        {/* ── Target Slot (purple skill result) ── */}
+        {targetSlotTile && (
+          <View style={styles.targetSlotRow}>
+            <Text style={styles.targetSlotLabel}>اضغط لإضافة للشريط ↓</Text>
+            <Animated.View style={{ transform: [{ scale: targetSlotPulse }] }}>
+              <TouchableOpacity
+                onPress={handleTargetSlotTap}
+                activeOpacity={0.8}
+                style={styles.targetSlotCell}
+              >
+                <TileComponent
+                  tile={targetSlotTile}
+                  size={54}
+                  onPress={handleTargetSlotTap}
+                  disabled={false}
+                />
+              </TouchableOpacity>
+            </Animated.View>
+          </View>
+        )}
 
         {/* ── Tray ── */}
         <View
@@ -1327,6 +1393,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row', gap: 8, marginBottom: 16,
   },
   winStar: { fontSize: 28 },
+  targetSlotRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 16,
+  },
+  targetSlotLabel: {
+    color: '#c9a0f0',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  targetSlotCell: {
+    width: 62,
+    height: 62,
+    borderRadius: 14,
+    borderWidth: 2.5,
+    borderColor: '#9c27b0',
+    backgroundColor: 'rgba(156,39,176,0.18)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#9c27b0',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.6,
+    shadowRadius: 10,
+    elevation: 8,
+  },
   starFloat: {
     position: 'absolute',
     fontSize: 24,

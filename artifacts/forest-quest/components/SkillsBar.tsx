@@ -45,8 +45,8 @@ export default function SkillsBar({
         color="#ab47bc"
         count={purpleCount}
         onPress={onPurple}
-        icon="shuffle"
-        label="خلط"
+        icon="crosshair"
+        label="إنقاذ"
         testID="skill-purple"
         disabled={false}
       />
