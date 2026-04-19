@@ -439,18 +439,34 @@ export default function GameScreen() {
     const twin = hasTwinsInTray(tray);
     if (!twin) return;
     const { symbol } = twin;
-    let fRow = -1, fCol = -1;
+
+    // Search ALL depths — not just the top tile
+    let fRow = -1, fCol = -1, fDepth = -1;
     outer: for (let r = 0; r < BOARD_ROWS; r++) {
       for (let c = 0; c < BOARD_COLS; c++) {
-        if (board[r]?.[c]?.[0]?.symbol === symbol) { fRow = r; fCol = c; break outer; }
+        for (let d = 0; d < (board[r]?.[c]?.length ?? 0); d++) {
+          if (board[r][c][d].symbol === symbol) {
+            fRow = r; fCol = c; fDepth = d;
+            break outer;
+          }
+        }
       }
     }
     if (fRow === -1) return;
+
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-    const boardTile = board[fRow][fCol][0];
-    const newBoard: GameBoard = board.map((r, ri) =>
-      r.map((s, ci) => ri === fRow && ci === fCol ? s.slice(1) : [...s])
+    const boardTile = board[fRow][fCol][fDepth];
+
+    // Remove tile at any depth (not necessarily top)
+    const newBoard: GameBoard = board.map((row, ri) =>
+      row.map((stack, ci) => {
+        if (ri === fRow && ci === fCol) {
+          return [...stack.slice(0, fDepth), ...stack.slice(fDepth + 1)];
+        }
+        return [...stack];
+      })
     );
+
     const newTray = insertIntoTray(tray, boardTile);
     const cnt = newTray.filter(t => t.symbol === symbol).length;
     if (cnt >= 3) {
