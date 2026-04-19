@@ -1,15 +1,18 @@
 import { TileSymbol, Tile } from '../context/GameContext';
 
-const EASY_SYMBOLS: TileSymbol[] = ['apple', 'pear', 'grape', 'orange', 'lemon'];
+// ── السهل: حيوانات الغابة الأساسية ──────────────────────────────────
+const EASY_SYMBOLS: TileSymbol[] = ['fox', 'wolf', 'owl', 'deer', 'rabbit'];
+// ── المتوسط: حيوانات + عناصر الغابة ──────────────────────────────────
 const MEDIUM_SYMBOLS: TileSymbol[] = [
-  'apple', 'pear', 'grape', 'orange', 'lemon',
-  'mushroom', 'leaf', 'acorn', 'pinecone', 'berry',
-];
-const HARD_SYMBOLS: TileSymbol[] = [
-  'apple', 'pear', 'grape', 'orange', 'lemon',
-  'mushroom', 'leaf', 'acorn', 'pinecone', 'berry',
   'fox', 'wolf', 'owl', 'deer', 'rabbit',
-  'rune', 'compass', 'crystal', 'bat', 'hedgehog',
+  'bat', 'hedgehog', 'mushroom', 'leaf', 'acorn',
+];
+// ── الصعب: كل الرموز ──────────────────────────────────────────────────
+const HARD_SYMBOLS: TileSymbol[] = [
+  'fox', 'wolf', 'owl', 'deer', 'rabbit',
+  'bat', 'hedgehog', 'mushroom', 'leaf', 'acorn',
+  'pinecone', 'berry', 'rune', 'compass', 'crystal',
+  'apple', 'pear', 'grape', 'orange', 'lemon',
 ];
 
 // Fixed board grid dimensions (fits in one screen)
@@ -57,7 +60,7 @@ function generateTutorialBoard(): GameBoard {
   const board: GameBoard = Array.from({ length: BOARD_ROWS }, () =>
     Array.from({ length: BOARD_COLS }, () => [] as Tile[])
   );
-  const syms: TileSymbol[] = ['apple','apple','apple','pear','pear','pear','grape','grape','grape'];
+  const syms: TileSymbol[] = ['fox','fox','fox','wolf','wolf','wolf','owl','owl','owl'];
   const s = shuffle(syms);
   // Place 9 tiles in a 3×3 block centred in the bottom-middle of the board
   const positions: [number, number][] = [
@@ -177,8 +180,19 @@ export function getSymbolEmoji(symbol: TileSymbol): string {
 }
 
 export const SYMBOL_COLORS: Record<TileSymbol, string> = {
+  // حيوانات الغابة — ألوان مميزة
+  fox:      '#ff8f00',  // برتقالي دافئ
+  wolf:     '#7986cb',  // بنفسجي رمادي
+  owl:      '#8d6e63',  // بني دافئ
+  deer:     '#e8a87c',  // بيج دافئ
+  rabbit:   '#b0bec5',  // رمادي فاتح
+  bat:      '#ab47bc',  // بنفسجي
+  hedgehog: '#bf8c6b',  // بني مائل للذهبي
+  // عناصر الغابة
+  mushroom: '#ef6c00', leaf: '#43a047', acorn: '#6d4c41',
+  pinecone: '#546e7a', berry: '#e91e63',
+  // عناصر سحرية
+  rune: '#5c6bc0', compass: '#00897b', crystal: '#00b0ff',
+  // الفواكه (مستخدمة في المراحل الصعبة فقط)
   apple: '#e53935', pear: '#8bc34a', grape: '#9c27b0', orange: '#ff7043', lemon: '#fdd835',
-  mushroom: '#8d6e63', leaf: '#4caf50', acorn: '#795548', pinecone: '#546e7a', berry: '#e91e63',
-  fox: '#ff8f00', wolf: '#78909c', owl: '#6d4c41', deer: '#a1887f', rabbit: '#f5f5f5',
-  rune: '#5c6bc0', compass: '#00897b', crystal: '#00b0ff', bat: '#37474f', hedgehog: '#bf8c6b',
 };
