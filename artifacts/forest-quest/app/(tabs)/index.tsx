@@ -50,23 +50,33 @@ function getSize(level: number): number {
   return SZ;
 }
 
-function getArabic(level: number): string | null {
-  const m: Record<number, string> = {
-    1:    'الدور الأول',
-    2:    'الدور الثاني',
-    3:    'الدور الثالث',
-    4:    'الدور الرابع',
-    5:    'الدور الخامس',
-    10:   'الدور العاشر',
-    20:   'الدور العشرون',
-    30:   'الدور الثلاثون',
-    50:   'الدور الخمسون',
-    100:  'الدور المائة',
-    200:  'الدور المئتان',
-    500:  'الدور الخمسمائة',
-    1000: 'الدور الألف',
-  };
-  return m[level] ?? null;
+function toOrdinal(n: number): string {
+  if (n === 1000) return 'الألف';
+  const UNITS  = ['','الأول','الثاني','الثالث','الرابع','الخامس','السادس','السابع','الثامن','التاسع'];
+  const TEENS  = ['العاشر','الحادي عشر','الثاني عشر','الثالث عشر','الرابع عشر','الخامس عشر',
+                  'السادس عشر','السابع عشر','الثامن عشر','التاسع عشر'];
+  const TENS   = ['','','العشرون','الثلاثون','الأربعون','الخمسون','الستون','السبعون','الثمانون','التسعون'];
+  const H_WORD = ['','مائة','مئتين','ثلاثمائة','أربعمائة','خمسمائة','ستمائة','سبعمائة','ثمانمائة','تسعمائة'];
+
+  if (n >= 1   && n <= 9)  return UNITS[n];
+  if (n >= 10  && n <= 19) return TEENS[n - 10];
+  if (n >= 20  && n < 100) {
+    const t = Math.floor(n / 10), u = n % 10;
+    return u === 0 ? TENS[t] : `${UNITS[u]} و${TENS[t]}`;
+  }
+  // 100-999
+  const h = Math.floor(n / 100), rem = n % 100;
+  const hStr = `ال${H_WORD[h]}`;
+  if (rem === 0) return hStr;
+  let remStr: string;
+  if (rem >= 1  && rem <= 9)  remStr = UNITS[rem];
+  else if (rem >= 10 && rem <= 19) remStr = TEENS[rem - 10];
+  else { const t = Math.floor(rem/10), u = rem%10; remStr = u===0 ? TENS[t] : `${UNITS[u]} و${TENS[t]}`; }
+  return `${remStr} و${H_WORD[h]}`;
+}
+
+function getArabic(level: number): string {
+  return `الدور ${toOrdinal(level)}`;
 }
 
 // ── Precompute ALL positions outside React (module-level) ─
@@ -186,8 +196,8 @@ const LevelNode = memo(({ level, cx, cy, state, pulse, onPress }: NodeProps) => 
         )}
       </View>
 
-      {/* Arabic label for notable levels */}
-      {name && state !== 'locked' && (
+      {/* Arabic label — shown for every completed/current level */}
+      {state !== 'locked' && (
         <View
           style={[
             styles.label,
@@ -198,7 +208,10 @@ const LevelNode = memo(({ level, cx, cy, state, pulse, onPress }: NodeProps) => 
           ]}
           pointerEvents="none"
         >
-          <Text style={[styles.labelText, isBoss && styles.labelTextBoss]}>{name}</Text>
+          <Text style={[
+            styles.labelText,
+            isBoss && styles.labelTextBoss,
+          ]}>{name}</Text>
         </View>
       )}
     </TouchableOpacity>
