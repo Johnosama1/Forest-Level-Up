@@ -170,7 +170,13 @@ const LevelNode = memo(({ level, cx, cy, state, pulse, onPress }: NodeProps) => 
         isBoss                && styles.nodeBoss,
       ]}>
         {state === 'completed' && (
-          <Feather name="check" size={size * 0.44} color="#fff" />
+          <>
+            <Text style={[styles.currentNum, { fontSize: size * 0.29, color: '#fff' }]}>{level}</Text>
+            {/* small check badge */}
+            <View style={[styles.checkBadge, { width: size * 0.32, height: size * 0.32, borderRadius: size * 0.16, bottom: -size * 0.06, right: -size * 0.06 }]}>
+              <Feather name="check" size={size * 0.2} color="#fff" />
+            </View>
+          </>
         )}
         {state === 'current' && (
           <Text style={[styles.currentNum, { fontSize: size * 0.3 }]}>{level}</Text>
@@ -793,6 +799,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 3,
     position: 'absolute',
+    overflow: 'visible',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.5,
@@ -822,6 +829,15 @@ const styles = StyleSheet.create({
   currentNum: {
     color: '#f5a623',
     fontWeight: '900',
+  },
+  // Small ✓ badge on completed nodes
+  checkBadge: {
+    position: 'absolute',
+    backgroundColor: '#4caf50',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#1b5e20',
   },
 
   // Arabic label
