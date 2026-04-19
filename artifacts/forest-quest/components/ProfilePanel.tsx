@@ -11,6 +11,7 @@ import {
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { useGame } from '@/context/GameContext';
 
 interface Props {
@@ -23,6 +24,13 @@ export default function ProfilePanel({ visible, onClose }: Props) {
   const [editingName, setEditingName] = useState(false);
   const [nameInput,   setNameInput]   = useState(profile.username);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
+  const [copiedId, setCopiedId] = useState(false);
+
+  async function copyPlayerId() {
+    await Clipboard.setStringAsync(profile.playerId);
+    setCopiedId(true);
+    setTimeout(() => setCopiedId(false), 2000);
+  }
 
   const scale = useRef(new Animated.Value(0)).current;
 
@@ -97,7 +105,21 @@ export default function ProfilePanel({ visible, onClose }: Props) {
                     <Feather name="edit-2" size={13} color="#8bc34a" style={{ marginRight: 6 }} />
                   </TouchableOpacity>
                 )}
-                <Text style={styles.playerId}>{profile.playerId}</Text>
+                <View style={styles.playerIdRow}>
+                  <Text style={styles.playerId}>{profile.playerId}</Text>
+                  <TouchableOpacity
+                    onPress={copyPlayerId}
+                    activeOpacity={0.7}
+                    style={[styles.copyBtn, copiedId && styles.copyBtnDone]}
+                  >
+                    <Feather
+                      name={copiedId ? 'check' : 'copy'}
+                      size={12}
+                      color={copiedId ? '#4caf50' : '#7a6a9a'}
+                    />
+                    {copiedId && <Text style={styles.copiedText}>تم النسخ</Text>}
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
 
@@ -281,10 +303,37 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
   },
+  playerIdRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    marginTop: 2,
+  },
   playerId: {
     color: '#7a6a9a',
     fontSize: 11,
     letterSpacing: 0.5,
+    flex: 1,
+  },
+  copyBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#3a2a5a',
+    backgroundColor: 'rgba(255,255,255,0.04)',
+  },
+  copyBtnDone: {
+    borderColor: '#4caf5055',
+    backgroundColor: 'rgba(76,175,80,0.08)',
+  },
+  copiedText: {
+    color: '#4caf50',
+    fontSize: 10,
+    fontWeight: '600',
   },
   nameEditRow: {
     flexDirection: 'row',
