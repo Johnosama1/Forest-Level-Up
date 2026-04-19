@@ -22,7 +22,7 @@ export default function ProfilePanel({ visible, onClose }: Props) {
   const { profile, gameState, updateUsername, toggleSound, resetGame } = useGame();
   const [editingName, setEditingName] = useState(false);
   const [nameInput,   setNameInput]   = useState(profile.username);
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const scale = useRef(new Animated.Value(0)).current;
 
@@ -30,7 +30,7 @@ export default function ProfilePanel({ visible, onClose }: Props) {
     if (visible) {
       setNameInput(profile.username);
       setEditingName(false);
-      setConfirmReset(false);
+      setShowResetConfirm(false);
       scale.setValue(0);
       Animated.spring(scale, {
         toValue: 1,
@@ -46,10 +46,9 @@ export default function ProfilePanel({ visible, onClose }: Props) {
     setEditingName(false);
   }
 
-  function handleReset() {
-    if (!confirmReset) { setConfirmReset(true); return; }
+  function confirmReset() {
     resetGame();
-    setConfirmReset(false);
+    setShowResetConfirm(false);
     onClose();
   }
 
@@ -126,21 +125,23 @@ export default function ProfilePanel({ visible, onClose }: Props) {
                 />
                 <Text style={styles.rowLabel}>الصوت</Text>
               </View>
-              <View style={[styles.soundDot, { backgroundColor: profile.soundEnabled ? '#8bc34a' : '#e53935' }]} />
+              <View style={[styles.soundToggle, { backgroundColor: profile.soundEnabled ? '#8bc34a' : '#e53935' }]}>
+                <Text style={styles.soundToggleText}>
+                  {profile.soundEnabled ? 'تشغيل' : 'إيقاف'}
+                </Text>
+              </View>
             </TouchableOpacity>
 
             <View style={styles.divider} />
 
             {/* Reset Game */}
             <TouchableOpacity
-              style={[styles.resetBtn, confirmReset && styles.resetBtnConfirm]}
-              onPress={handleReset}
+              style={styles.resetBtn}
+              onPress={() => setShowResetConfirm(true)}
               activeOpacity={0.8}
             >
-              <Feather name="refresh-ccw" size={16} color={confirmReset ? '#fff' : '#e53935'} />
-              <Text style={[styles.resetText, confirmReset && { color: '#fff' }]}>
-                {confirmReset ? 'اضغط مرة أخرى للتأكيد!' : 'إعادة تشغيل اللعبة من الصفر'}
-              </Text>
+              <Feather name="refresh-ccw" size={16} color="#e53935" />
+              <Text style={styles.resetText}>إعادة اللعبة من الصفر</Text>
             </TouchableOpacity>
 
             <Text style={styles.resetNote}>
@@ -149,6 +150,42 @@ export default function ProfilePanel({ visible, onClose }: Props) {
           </ScrollView>
         </Animated.View>
       </View>
+
+      {/* ── Reset Confirmation Dialog ── */}
+      <Modal
+        transparent
+        animationType="fade"
+        visible={showResetConfirm}
+        onRequestClose={() => setShowResetConfirm(false)}
+      >
+        <View style={styles.confirmBackdrop}>
+          <View style={styles.confirmCard}>
+            <View style={styles.confirmIconCircle}>
+              <Feather name="alert-triangle" size={32} color="#e53935" />
+            </View>
+            <Text style={styles.confirmTitle}>إعادة اللعبة من الصفر</Text>
+            <Text style={styles.confirmMsg}>هل تريد إعادة اللعبة من الصفر؟</Text>
+            <Text style={styles.confirmWarn}>سيتم حذف كل التقدم والعملات نهائياً</Text>
+
+            <TouchableOpacity
+              style={styles.confirmYesBtn}
+              onPress={confirmReset}
+              activeOpacity={0.85}
+            >
+              <Feather name="refresh-ccw" size={16} color="#fff" />
+              <Text style={styles.confirmYesText}>نعم، أعد اللعبة من الصفر</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.confirmNoBtn}
+              onPress={() => setShowResetConfirm(false)}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.confirmNoText}>لا، أريد الاستمرار في اللعبة</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </Modal>
   );
 }
@@ -313,10 +350,17 @@ const styles = StyleSheet.create({
     color: '#ccc',
     fontSize: 15,
   },
-  soundDot: {
-    width: 14,
-    height: 14,
-    borderRadius: 7,
+  soundToggle: {
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    minWidth: 60,
+    alignItems: 'center',
+  },
+  soundToggleText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '700',
   },
   resetBtn: {
     flexDirection: 'row',
@@ -330,10 +374,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     marginTop: 4,
   },
-  resetBtnConfirm: {
-    backgroundColor: '#e53935',
-    borderColor: '#e53935',
-  },
   resetText: {
     color: '#e53935',
     fontSize: 14,
@@ -344,6 +384,87 @@ const styles = StyleSheet.create({
     fontSize: 11,
     textAlign: 'center',
     marginTop: 6,
+  },
+  confirmBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 30,
+  },
+  confirmCard: {
+    width: '100%',
+    maxWidth: 320,
+    backgroundColor: '#1a0f2e',
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: '#e5393555',
+    padding: 24,
+    alignItems: 'center',
+    shadowColor: '#e53935',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 20,
+  },
+  confirmIconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: 'rgba(229,57,53,0.12)',
+    borderWidth: 1.5,
+    borderColor: '#e5393555',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
+  },
+  confirmTitle: {
+    color: '#f0e0b8',
+    fontSize: 17,
+    fontWeight: '800',
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  confirmMsg: {
+    color: '#ccc',
+    fontSize: 14,
+    textAlign: 'center',
+    marginBottom: 6,
+  },
+  confirmWarn: {
+    color: '#e5393599',
+    fontSize: 12,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  confirmYesBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    backgroundColor: '#e53935',
+    borderRadius: 12,
+    paddingVertical: 13,
+    marginBottom: 10,
+  },
+  confirmYesText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  confirmNoBtn: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.2)',
+    borderRadius: 12,
+    paddingVertical: 13,
+    alignItems: 'center',
+  },
+  confirmNoText: {
+    color: '#aaa',
+    fontSize: 13,
+    fontWeight: '600',
   },
   // Avatar button (small widget near X)
   avatarBtn: {

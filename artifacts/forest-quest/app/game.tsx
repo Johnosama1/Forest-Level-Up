@@ -34,7 +34,6 @@ import SkillsBar from '@/components/SkillsBar';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import AnimatedTrees from '@/components/AnimatedTrees';
 import { useForestAmbient } from '@/hooks/useForestAmbient';
-import InventoryPanel, { InventoryBagBtn, InventoryEntry } from '@/components/InventoryPanel';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
@@ -84,10 +83,6 @@ export default function GameScreen() {
   const [showExitDialog, setShowExitDialog] = useState(false);
   // Show tutorial on level 1 only
   const [showTutorial,  setShowTutorial]  = useState(currentLevel === 1);
-
-  // ── Inventory ────────────────────────────────────────
-  const [inventory, setInventory] = useState<InventoryEntry[]>([]);
-  const [showInventory, setShowInventory] = useState(false);
 
   // ── Drag & Drop ────────────────────────────────────────
   const [dragTile, setDragTile] = useState<{ tile: Tile; row: number; col: number } | null>(null);
@@ -281,27 +276,6 @@ export default function GameScreen() {
     return () => clearInterval(interval);
   }, [won]);
 
-  // ── Inventory helpers ─────────────────────────────────
-  const addToInventory = useCallback((symbol: TileSymbol) => {
-    setInventory(prev => {
-      const existing = prev.find(e => e.symbol === symbol);
-      if (existing) {
-        return prev.map(e => e.symbol === symbol ? { ...e, count: e.count + 1 } : e);
-      }
-      return [...prev, { symbol, count: 1 }];
-    });
-  }, []);
-
-  const removeFromInventory = useCallback((symbol: TileSymbol) => {
-    setInventory(prev => {
-      const entry = prev.find(e => e.symbol === symbol);
-      if (!entry) return prev;
-      if (entry.count <= 1) return prev.filter(e => e.symbol !== symbol);
-      return prev.map(e => e.symbol === symbol ? { ...e, count: e.count - 1 } : e);
-    });
-  }, []);
-
-  // Must be defined before useInventoryItem and handleCellPress which reference it
   const insertIntoTray = useCallback((currentTray: Tile[], newTile: Tile): Tile[] => {
     let insertIdx = -1;
     for (let i = currentTray.length - 1; i >= 0; i--) {
@@ -310,51 +284,6 @@ export default function GameScreen() {
     if (insertIdx === -1) return [...currentTray, newTile];
     return [...currentTray.slice(0, insertIdx), newTile, ...currentTray.slice(insertIdx)];
   }, []);
-
-  // Send an inventory item into the tray
-  const useInventoryItem = useCallback((symbol: TileSymbol) => {
-    const entry = inventory.find(e => e.symbol === symbol);
-    if (!entry || entry.count <= 0) return;
-    if (tray.length >= 7) return;
-
-    const fakeTile: Tile = {
-      id: `inv-use-${symbol}-${Date.now()}`,
-      symbol,
-      row: -1,
-      col: -1,
-    };
-
-    removeFromInventory(symbol);
-    const newTray = insertIntoTray(tray, fakeTile);
-    const newHistory = [...trayHistory, fakeTile.id];
-    const matchCnt = newTray.filter(t => t.symbol === symbol).length;
-
-    if (matchCnt >= 3) {
-      let cnt = 0;
-      const matchedIds = new Set<string>();
-      for (const t of newTray) {
-        if (t.symbol === symbol && cnt < 3) { matchedIds.add(t.id); cnt++; }
-      }
-      const afterMatch   = newTray.filter(t => !matchedIds.has(t.id));
-      const afterHistory = newHistory.filter(id => !matchedIds.has(id));
-      updateCoins(20);
-      showCoinPopup('+20 🪙');
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      setTray(afterMatch);
-      setTrayHistory(afterHistory);
-      if (isBoardEmpty(board) && afterMatch.length === 0) {
-        setWon(true); unlockLevel(currentLevel + 1);
-      }
-    } else {
-      setTray(newTray);
-      setTrayHistory(newHistory);
-      if (newTray.length >= 7) {
-        setLost(true);
-        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
-      }
-    }
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-  }, [inventory, tray, trayHistory, board, removeFromInventory, insertIntoTray, updateCoins, unlockLevel, currentLevel]);
 
   const startLevel = useCallback(() => {
     setBoard(generateBoard(currentLevel));
@@ -367,7 +296,6 @@ export default function GameScreen() {
     setSkillRed(3);
     setSkillPurple(3);
     setSkillPopup(null);
-    setInventory([]);
   }, [currentLevel]);
 
   // Return the last 3 tiles from tray back to their original board positions
@@ -460,10 +388,6 @@ export default function GameScreen() {
           `⚡ كومبو x${combo} رائع!`
         );
       }
-      // Every 5th match adds 1 item of that symbol to inventory as a bonus
-      if (Math.random() < 0.2) {
-        addToInventory(topTile.symbol);
-      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       // Match burst animation
       matchBurst.setValue(0);
@@ -493,7 +417,7 @@ export default function GameScreen() {
         setWon(true); unlockLevel(currentLevel + 1);
       }
     }
-  }, [board, tray, trayHistory, won, lost, currentLevel, insertIntoTray, addToInventory]);
+  }, [board, tray, trayHistory, won, lost, currentLevel, insertIntoTray]);
   // Keep the PanResponder ref in sync — must be after handleCellPress is defined
   handleCellPressRef.current = handleCellPress;
 
@@ -639,10 +563,6 @@ export default function GameScreen() {
               <View style={styles.exitBtnGlow} pointerEvents="none" />
               <Feather name="x" size={22} color="#ff6b6b" />
             </TouchableOpacity>
-            <InventoryBagBtn
-              count={inventory.reduce((s, e) => s + e.count, 0)}
-              onPress={() => setShowInventory(true)}
-            />
           </View>
           <Text style={styles.levelText}>المستوى {currentLevel}</Text>
           <View style={styles.coinsBadge}>
@@ -960,15 +880,6 @@ export default function GameScreen() {
         {showTutorial && (
           <TutorialOverlay onDone={() => setShowTutorial(false)} />
         )}
-
-        {/* ── Inventory Panel ── */}
-        <InventoryPanel
-          inventory={inventory}
-          onUseItem={useInventoryItem}
-          onClose={() => setShowInventory(false)}
-          visible={showInventory}
-        />
-
 
         {/* ── Exit Dialog ── */}
         {showExitDialog && (
