@@ -75,16 +75,15 @@ function generateTutorialBoard(): GameBoard {
 }
 
 // ── Target tile count per level ──────────────────────────────────────────
-// Level 1 = 9 (tutorial)
-// Level 2 = 51 (~50, nearest multiple of 3)
-// Level 3 = 90 (51 × 1.8, floored to multiple of 3)
-// Each subsequent level × 1.8, capped at 345 (35 cells × ~10 deep)
+// Level 1 = 9  (tutorial)
+// Level 2 = 18 → Level 3 = 24 → Level 4 = 30 → Level 5 = 39 → …
+// Each level × 1.25 capped at 150 (comfortable, never overwhelming)
 function getTargetTiles(level: number): number {
   if (level === 1) return 9;
-  const MAX_TILES = BOARD_COLS * BOARD_ROWS * 10; // 350 absolute max
-  const raw = 51 * Math.pow(1.8, level - 2);
+  const MAX_TILES = 150;
+  const raw = 18 * Math.pow(1.25, level - 2);
   const capped = Math.min(raw, MAX_TILES);
-  return Math.max(Math.floor(capped / 3) * 3, 9);
+  return Math.max(Math.floor(capped / 3) * 3, 18);
 }
 
 export function generateBoard(level: number): GameBoard {
