@@ -1197,9 +1197,8 @@ const styles = StyleSheet.create({
 
   // Board
   boardWrapper: {
-    flex: 1, alignItems: 'center', justifyContent: 'flex-start',
+    flex: 1, alignItems: 'center', justifyContent: 'center',
     marginHorizontal: BOARD_MARGIN,
-    paddingTop: 6,
   },
   board: {
     backgroundColor: 'transparent',
