@@ -378,13 +378,13 @@ export default function GameScreen() {
 
       comboRef.current += 1;
       const combo = comboRef.current;
-      const coinBonus = combo >= 3 ? 60 : combo >= 2 ? 40 : 20;
+      const coinBonus = 10;
       updateCoins(coinBonus);
       showCoinPopup(`+${coinBonus} 🪙`);
       if (combo >= 2) {
         setComboMsg(
-          combo === 2 ? '🔥 كومبو x2 +20 مكافأة!' :
-          combo === 3 ? '💥 كومبو x3 +40 مكافأة!' :
+          combo === 2 ? '🔥 كومبو x2!' :
+          combo === 3 ? '💥 كومبو x3!' :
           `⚡ كومبو x${combo} رائع!`
         );
       }
@@ -442,7 +442,7 @@ export default function GameScreen() {
     const cnt = newTray.filter(t => t.symbol === symbol).length;
     if (cnt >= 3) {
       const afterMatch = removeMatchFromTray(newTray, symbol);
-      updateCoins(20); showCoinPopup('+20 🪙');
+      updateCoins(10); showCoinPopup('+10 🪙');
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       setTray(afterMatch); setBoard(newBoard);
       if (isBoardEmpty(newBoard) && afterMatch.length === 0) {
