@@ -920,7 +920,7 @@ export default function GameScreen() {
               <View style={styles.winAccentBar} />
               <Text style={styles.resultEmoji}>🏆</Text>
               <Text style={styles.resultTitle}>رائع! فزت!</Text>
-              <Text style={styles.resultSub}>المستوى {currentLevel} مكتمل</Text>
+              <Text style={styles.resultSub}>الدور {currentLevel} من 1000 ✅</Text>
               {/* Stars row */}
               <View style={styles.winStarsRow}>
                 {[1, 2, 3].map(n => (
