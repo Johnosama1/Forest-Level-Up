@@ -34,6 +34,10 @@ import SkillsBar from '@/components/SkillsBar';
 import TutorialOverlay from '@/components/TutorialOverlay';
 import AnimatedTrees from '@/components/AnimatedTrees';
 import { useForestAmbient } from '@/hooks/useForestAmbient';
+import RatingModal from '@/components/RatingModal';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const RATING_FLAG_KEY = 'forest_quest_rated';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 const BG = require('../assets/images/forest_bg.jpg');
@@ -83,6 +87,7 @@ export default function GameScreen() {
   const [showExitDialog, setShowExitDialog] = useState(false);
   // Show tutorial on level 1 only
   const [showTutorial,  setShowTutorial]  = useState(currentLevel === 1);
+  const [showRating, setShowRating] = useState(false);
 
   // ── Drag & Drop ────────────────────────────────────────
   const [dragTile, setDragTile] = useState<{ tile: Tile; row: number; col: number } | null>(null);
@@ -189,6 +194,18 @@ export default function GameScreen() {
     });
   }, [won]);
 
+  // Show rating popup once after Level 5 win
+  useEffect(() => {
+    if (won && currentLevel === 5) {
+      AsyncStorage.getItem(RATING_FLAG_KEY).then(val => {
+        if (!val) {
+          // Small delay so the win card animates in first
+          setTimeout(() => setShowRating(true), 1800);
+        }
+      });
+    }
+  }, [won, currentLevel]);
+
   // Combo badge animation
   useEffect(() => {
     if (comboMsg) {
@@ -283,6 +300,11 @@ export default function GameScreen() {
     }
     if (insertIdx === -1) return [...currentTray, newTile];
     return [...currentTray.slice(0, insertIdx), newTile, ...currentTray.slice(insertIdx)];
+  }, []);
+
+  const handleCloseRating = useCallback(() => {
+    AsyncStorage.setItem(RATING_FLAG_KEY, 'true');
+    setShowRating(false);
   }, []);
 
   const startLevel = useCallback(() => {
@@ -880,6 +902,9 @@ export default function GameScreen() {
         {showTutorial && (
           <TutorialOverlay onDone={() => setShowTutorial(false)} />
         )}
+
+        {/* ── Rating Popup (Level 5 win, once only) ── */}
+        <RatingModal visible={showRating} onClose={handleCloseRating} />
 
         {/* ── Exit Dialog ── */}
         {showExitDialog && (
