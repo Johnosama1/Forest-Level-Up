@@ -63,7 +63,7 @@ interface SkillDef {
 const SKILL_DEFS: Record<SkillType, SkillDef> = {
   green:  { key: 'green',  label: 'مهارة المساعد',  desc: 'تُكمل زوجاً في الشريط تلقائياً',    icon: 'plus-circle', color: '#4caf50' },
   red:    { key: 'red',    label: 'مهارة التراجع',  desc: 'ترجع آخر قطعة إلى اللوح',           icon: 'rotate-ccw', color: '#e07030' },
-  purple: { key: 'purple', label: 'مهارة الخلط',    desc: 'تخلط مواضع القطع على اللوح',         icon: 'shuffle',     color: '#9c27b0' },
+  purple: { key: 'purple', label: 'مهارة الخلط',    desc: 'تُطفو القطع المطابقة للشريط لأعلى المجموعات',  icon: 'shuffle',     color: '#9c27b0' },
 };
 
 export default function GameScreen() {
@@ -490,18 +490,52 @@ export default function GameScreen() {
 
   const execPurple = useCallback(() => {
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Heavy);
-    const topTiles: { row: number; col: number; tile: Tile }[] = [];
-    for (let r = 0; r < BOARD_ROWS; r++)
-      for (let c = 0; c < BOARD_COLS; c++)
-        if (board[r]?.[c]?.length > 0) topTiles.push({ row: r, col: c, tile: board[r][c][0] });
-    const shuffledTiles = shuffle(topTiles.map(t => t.tile));
+
+    // ── Count duplicate symbols in the tray ──────────────
+    const trayCounts: Record<string, number> = {};
+    for (const t of tray) {
+      trayCounts[t.symbol] = (trayCounts[t.symbol] || 0) + 1;
+    }
+    const targetSymbols = new Set(
+      Object.entries(trayCounts)
+        .filter(([, cnt]) => cnt >= 2)
+        .map(([sym]) => sym as TileSymbol)
+    );
+
     const newBoard: GameBoard = board.map(r => r.map(s => [...s]));
-    topTiles.forEach((item, i) => {
-      newBoard[item.row][item.col][0] = { ...shuffledTiles[i], row: item.row, col: item.col };
-    });
+
+    if (targetSymbols.size === 0) {
+      // No duplicates in tray → regular shuffle as fallback
+      const topTiles: { row: number; col: number; tile: Tile }[] = [];
+      for (let r = 0; r < BOARD_ROWS; r++)
+        for (let c = 0; c < BOARD_COLS; c++)
+          if (board[r]?.[c]?.length > 0)
+            topTiles.push({ row: r, col: c, tile: board[r][c][0] });
+      const shuffledTiles = shuffle(topTiles.map(t => t.tile));
+      topTiles.forEach((item, i) => {
+        newBoard[item.row][item.col][0] = { ...shuffledTiles[i], row: item.row, col: item.col };
+      });
+    } else {
+      // ── Surface matching tiles to top of their stacks ──
+      for (let r = 0; r < BOARD_ROWS; r++) {
+        for (let c = 0; c < BOARD_COLS; c++) {
+          const stack = newBoard[r][c];
+          if (stack.length <= 1) continue;
+          // Already on top — nothing to do
+          if (targetSymbols.has(stack[0]?.symbol)) continue;
+          // Find first target symbol buried in this stack
+          const idx = stack.findIndex((t, i) => i > 0 && targetSymbols.has(t.symbol));
+          if (idx === -1) continue;
+          // Bring that tile to index 0 (top)
+          const [pulled] = stack.splice(idx, 1);
+          stack.unshift({ ...pulled, row: r, col: c });
+        }
+      }
+    }
+
     setBoard(newBoard);
     setSkillPurple(p => p - 1);
-  }, [skillPurple, board]);
+  }, [skillPurple, board, tray]);
 
   // ── Skill press handler (routes to exec or purchase popup) ────
   const handleSkillPress = useCallback((type: SkillType) => {
