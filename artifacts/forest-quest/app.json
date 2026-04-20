@@ -17,7 +17,12 @@
       "supportsTablet": false
     },
     "android": {
-      "backgroundColor": "#1a0e2e"
+      "backgroundColor": "#1a0e2e",
+      "package": "com.johnosama.forestquest",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/icon.png",
+        "backgroundColor": "#1a0e2e"
+      }
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -35,6 +40,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
-    }
+    },
+    "extra": {
+      "eas": {
+        "projectId": "6781e794-562a-440f-baf1-9076946b6339"
+      }
+    },
+    "owner": "johnosamas-organization"
   }
 }
